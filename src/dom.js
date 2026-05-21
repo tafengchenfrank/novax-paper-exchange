@@ -117,4 +117,9 @@ export const els = {
   syncAccount: document.querySelector("#syncAccount"),
   logoutAccount: document.querySelector("#logoutAccount"),
   mobileNavButtons: document.querySelectorAll("[data-mobile-nav]"),
+  legalModal: document.querySelector("#legalModal"),
+  closeLegal: document.querySelector("#closeLegal"),
+  legalTitle: document.querySelector("#legalTitle"),
+  legalBody: document.querySelector("#legalBody"),
+  legalDocButtons: document.querySelectorAll("[data-legal-doc]"),
 };

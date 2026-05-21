@@ -272,6 +272,34 @@ button {
   width: min(600px, 100%);
 }
 
+.legal-card {
+  width: min(720px, 100%);
+}
+
+.legal-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--soft);
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
+.legal-body h3,
+.legal-body p {
+  margin: 0;
+}
+
+.legal-body h3 {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.legal-body strong {
+  color: var(--amber);
+}
+
 .auth-field {
   display: grid;
   gap: 5px;
@@ -391,6 +419,82 @@ button {
     "learning learning leaderboard";
   gap: 14px;
   margin-top: 14px;
+}
+
+.beta-disclaimer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid rgba(243, 181, 70, 0.34);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(90deg, rgba(243, 181, 70, 0.12), rgba(70, 183, 199, 0.06)),
+    rgba(19, 24, 20, 0.9);
+  padding: 10px 12px;
+}
+
+.beta-disclaimer div {
+  min-width: 0;
+}
+
+.beta-disclaimer strong,
+.beta-disclaimer span {
+  display: block;
+}
+
+.beta-disclaimer strong {
+  font-size: 0.86rem;
+}
+
+.beta-disclaimer span {
+  margin-top: 3px;
+  color: var(--soft);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.legal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(19, 24, 20, 0.74);
+  color: var(--muted);
+  padding: 12px 14px;
+}
+
+.legal-footer span {
+  font-size: 0.78rem;
+}
+
+.legal-footer div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.legal-footer button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--soft);
+  cursor: pointer;
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+
+.legal-footer button:hover,
+.legal-footer button:focus-visible {
+  border-color: rgba(70, 183, 199, 0.58);
+  color: var(--text);
+  outline: none;
 }
 
 .panel {
@@ -1972,6 +2076,16 @@ tr:last-child td {
   .feed-list,
   .learning-list {
     grid-template-columns: 1fr;
+  }
+
+  .beta-disclaimer,
+  .legal-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .legal-footer div {
+    justify-content: flex-start;
   }
 
   .performance-grid {

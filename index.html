@@ -70,6 +70,14 @@
         </section>
       </header>
 
+      <section class="beta-disclaimer" aria-label="Beta 風險聲明">
+        <div>
+          <strong>Beta 模擬交易環境</strong>
+          <span>NovaX 僅供投資學習與模擬交易，不提供真實入金、出金、代操或投資建議。</span>
+        </div>
+        <button class="tiny-action" type="button" data-legal-doc="risk">查看風險聲明</button>
+      </section>
+
       <main class="trading-grid">
         <section class="market-panel panel">
           <div class="panel-header">
@@ -446,6 +454,15 @@
         </section>
       </main>
 
+      <footer class="legal-footer" aria-label="法律與政策">
+        <span>NovaX Paper Exchange · Beta</span>
+        <div>
+          <button type="button" data-legal-doc="terms">使用條款</button>
+          <button type="button" data-legal-doc="privacy">隱私權政策</button>
+          <button type="button" data-legal-doc="risk">風險聲明</button>
+        </div>
+      </footer>
+
       <nav class="mobile-tabbar" aria-label="主要導覽">
         <button class="is-active" type="button" data-mobile-nav="trade">
           <span class="mobile-tab-icon trade-icon" aria-hidden="true"></span>
@@ -650,6 +667,20 @@
             <button id="saveTradeJournal" class="auth-submit" type="button">儲存日誌</button>
             <p id="journalMessage" class="auth-message" role="status"></p>
           </div>
+        </section>
+      </div>
+
+      <div id="legalModal" class="auth-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="legalTitle">
+        <button class="auth-backdrop" type="button" data-legal-close aria-label="關閉政策視窗"></button>
+        <section class="auth-card legal-card">
+          <div class="auth-head">
+            <div>
+              <span>NovaX Beta Policy</span>
+              <strong id="legalTitle">政策文件</strong>
+            </div>
+            <button id="closeLegal" class="icon-button" type="button" aria-label="關閉政策視窗">X</button>
+          </div>
+          <div id="legalBody" class="legal-body"></div>
         </section>
       </div>
     </div>

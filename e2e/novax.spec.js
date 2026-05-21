@@ -11,6 +11,13 @@ test("renders the trading shell and switches market controls", async ({ page }) 
   await gotoCleanApp(page);
 
   await expect(page.locator(".brand-lockup h1")).toHaveText("NovaX");
+  await expect(page.locator(".beta-disclaimer")).toContainText("模擬交易");
+  await page.getByRole("button", { name: "查看風險聲明" }).click();
+  await expect(page.locator("#legalModal")).toBeVisible();
+  await expect(page.locator("#legalTitle")).toHaveText("風險聲明");
+  await expect(page.locator("#legalBody")).toContainText("不構成投資建議");
+  await page.locator("#closeLegal").click();
+  await expect(page.locator("#legalModal")).toBeHidden();
   await expect(page.locator("#marketTitle")).toContainText("BTCUSDT");
   await expect(page.locator("#candleCanvas")).toBeVisible();
 

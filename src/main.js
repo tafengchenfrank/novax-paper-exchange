@@ -31,6 +31,60 @@ import { registerServiceWorker } from "./pwa.js";
 import { renderAll, renderTradePanel } from "./render.js";
 import { applySnapshot, loadState, saveState } from "./storage.js";
 
+const legalDocuments = {
+  terms: {
+    title: "使用條款",
+    body: `
+      <p><strong>最後更新：2026-05-21</strong></p>
+      <p>NovaX Paper Exchange 目前為 Beta 測試服務，目的在於提供模擬交易、投資學習與產品體驗。使用本平台即表示你理解並同意以下基本條款。</p>
+      <h3>1. 服務性質</h3>
+      <p>本平台提供的是模擬交易環境，不提供真實入金、出金、撮合交易、資產保管、代操、投資顧問或任何金融商品銷售服務。</p>
+      <h3>2. 帳號與使用責任</h3>
+      <p>你需要自行保管帳號登入資料，並確保提供的 email 與個人資料正確。若發現異常使用，平台可暫停或限制帳號功能。</p>
+      <h3>3. 公開內容</h3>
+      <p>若你將交易日誌設為公開，其他使用者可能看到你的公開交易紀錄、心得、留言與互動。請避免發布個資、攻擊性內容、違法內容或誤導他人的投資承諾。</p>
+      <h3>4. 服務變更</h3>
+      <p>Beta 期間功能、資料格式、排行榜、社群互動與保存策略可能調整或中斷。平台會盡力維持可用性，但不保證服務永不中斷或資料永不遺失。</p>
+      <h3>5. 免責範圍</h3>
+      <p>平台資訊僅供教育與模擬用途，不構成投資、法律、稅務或財務建議。任何真實投資決策與風險均由使用者自行承擔。</p>
+    `,
+  },
+  privacy: {
+    title: "隱私權政策",
+    body: `
+      <p><strong>最後更新：2026-05-21</strong></p>
+      <p>本政策說明 NovaX Beta 可能收集、使用與保存的資料類型。這是一份產品 Beta 用的基礎版本，正式商業化前應再由專業法務審閱。</p>
+      <h3>1. 我們收集的資料</h3>
+      <p>平台可能保存你的帳號名稱、email、密碼雜湊、登入 session、模擬資產快照、交易紀錄、學習進度、公開交易日誌、按讚、留言、追蹤關係與系統操作紀錄。</p>
+      <h3>2. 資料用途</h3>
+      <p>資料會用於登入驗證、同步模擬進度、顯示排行榜、提供公開個人頁與追蹤動態、改善產品體驗、排查錯誤與維護服務安全。</p>
+      <h3>3. 資料保存與第三方服務</h3>
+      <p>正式 Beta 目前部署於 Render，資料庫使用 Neon PostgreSQL。這些服務可能依其基礎設施處理與保存資料。請不要在平台輸入敏感個資、真實資產資訊或交易所 API 金鑰。</p>
+      <h3>4. 資料分享</h3>
+      <p>我們不會出售你的個人資料。公開交易日誌、留言、按讚與追蹤行為會依產品設計顯示給其他使用者。</p>
+      <h3>5. 使用者選擇</h3>
+      <p>你可以不公開交易日誌，也可以登出帳號。若需要修改或刪除帳號資料，請透過平台管理者指定的 Beta 回報管道提出。</p>
+      <h3>6. 安全限制</h3>
+      <p>平台會採取合理技術措施保護資料，例如密碼雜湊與環境變數保存密鑰；但網路服務無法保證絕對安全。</p>
+    `,
+  },
+  risk: {
+    title: "風險聲明",
+    body: `
+      <p><strong>最後更新：2026-05-21</strong></p>
+      <p>NovaX 是模擬交易與投資學習工具。請在使用前理解以下限制。</p>
+      <h3>1. 非真實交易</h3>
+      <p>平台內的資金、損益、倉位、排行榜與交易紀錄皆為模擬用途，不代表真實資產、真實收益或任何可提領價值。</p>
+      <h3>2. 行情資料限制</h3>
+      <p>平台可能使用本地模擬行情或第三方公開行情。資料可能延遲、中斷、錯誤或與真實市場成交價格不同，不應作為下單依據。</p>
+      <h3>3. 投資風險</h3>
+      <p>虛擬資產、股票、衍生品與槓桿交易均可能造成重大虧損。模擬績效不代表真實交易結果，過去績效也不保證未來表現。</p>
+      <h3>4. 不構成建議</h3>
+      <p>平台上的學習內容、提醒、社群留言與公開交易心得僅供參考，不構成投資建議或買賣推薦。任何真實投資前，請自行研究並評估風險承受能力。</p>
+    `,
+  },
+};
+
 const app = {
   els,
   state: loadState(),
@@ -50,6 +104,8 @@ const app = {
   authBusy: false,
   profileModalOpen: false,
   profileBusy: false,
+  legalModalOpen: false,
+  activeLegalDoc: "risk",
   publicProfileOpen: false,
   publicProfileBusy: false,
   selectedPublicProfileId: null,
@@ -385,6 +441,15 @@ function bindEvents(app) {
   app.els.saveTradeJournal.addEventListener("click", () => saveTradeJournal(app));
   app.els.syncAccount.addEventListener("click", () => syncNow(app));
   app.els.logoutAccount.addEventListener("click", () => logout(app));
+  app.els.legalDocButtons.forEach((button) => {
+    button.addEventListener("click", () => openLegalModal(app, button.dataset.legalDoc));
+  });
+  app.els.closeLegal.addEventListener("click", () => closeLegalModal(app));
+  app.els.legalModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.legalClose !== undefined) {
+      closeLegalModal(app);
+    }
+  });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (app.tradeDetailOpen) {
@@ -395,6 +460,8 @@ function bindEvents(app) {
       closeProfileModal(app);
     } else if (app.authModalOpen) {
       closeAuthModal(app);
+    } else if (app.legalModalOpen) {
+      closeLegalModal(app);
     }
   });
   window.addEventListener("resize", () => renderAll(app));
@@ -668,6 +735,22 @@ async function logout(app) {
 
 function closeAuthModal(app) {
   app.authModalOpen = false;
+  renderAll(app);
+}
+
+function openLegalModal(app, doc) {
+  app.activeLegalDoc = legalDocuments[doc] ? doc : "risk";
+  app.legalModalOpen = true;
+  app.els.legalTitle.textContent = legalDocuments[app.activeLegalDoc].title;
+  app.els.legalBody.innerHTML = legalDocuments[app.activeLegalDoc].body;
+  app.els.legalModal.classList.remove("is-hidden");
+  renderAll(app);
+  app.els.closeLegal.focus();
+}
+
+function closeLegalModal(app) {
+  app.legalModalOpen = false;
+  app.els.legalModal.classList.add("is-hidden");
   renderAll(app);
 }
 
@@ -1050,7 +1133,8 @@ function updateMobileNavFromScroll(app) {
     app.authModalOpen ||
     app.profileModalOpen ||
     app.publicProfileOpen ||
-    app.tradeDetailOpen
+    app.tradeDetailOpen ||
+    app.legalModalOpen
   ) {
     return;
   }

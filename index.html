@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b0f0c" />
+    <meta name="application-name" content="NovaX" />
+    <meta name="apple-mobile-web-app-title" content="NovaX" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>NovaX Paper Exchange</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/novax-logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/novax-icon-192.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <div class="app-frame">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <img class="brand-mark" src="assets/novax-logo.svg" alt="" aria-hidden="true" />
+          <div>
+            <h1>NovaX</h1>
+            <p>Paper Exchange</p>
+          </div>
+        </div>
+
+        <nav class="market-tabs" aria-label="交易對">
+          <button class="tab-button is-active" data-symbol="BTCUSDT">BTCUSDT</button>
+          <button class="tab-button" data-symbol="ETHUSDT">ETHUSDT</button>
+          <button class="tab-button" data-symbol="SOLUSDT">SOLUSDT</button>
+          <button class="tab-button" data-symbol="XRPUSDT">XRPUSDT</button>
+        </nav>
+
+        <div class="top-stats" aria-live="polite">
+          <div>
+            <span>標記價格</span>
+            <strong id="headerPrice">--</strong>
+          </div>
+          <div>
+            <span>24h</span>
+            <strong id="headerChange">--</strong>
+          </div>
+          <div>
+            <span>權益</span>
+            <strong id="headerEquity">--</strong>
+          </div>
+        </div>
+
+        <section class="account-widget" aria-label="帳號">
+          <div id="authGuest">
+            <button id="openAuth" class="account-button" type="button">
+              <span>帳號</span>
+              <strong>登入 / 註冊</strong>
+            </button>
+          </div>
+
+          <div id="authSignedIn" class="account-user is-hidden">
+            <div>
+              <span>帳號</span>
+              <strong id="authUserName">--</strong>
+            </div>
+            <div class="account-actions">
+              <button id="openProfile" class="tiny-action" type="button">資料</button>
+              <button id="syncAccount" class="tiny-action" type="button" title="儲存模擬進度到雲端">儲存</button>
+              <button id="logoutAccount" class="tiny-action" type="button">登出</button>
+            </div>
+          </div>
+        </section>
+      </header>
+
+      <main class="trading-grid">
+        <section class="market-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow" id="sourceEyebrow">Live Simulation</p>
+              <h2 id="marketTitle">BTCUSDT 永續</h2>
+            </div>
+            <div class="header-actions">
+              <div class="feed-controls">
+                <div class="segmented-control" aria-label="行情來源">
+                  <button class="is-active" data-market-source="sim">模擬</button>
+                  <button data-market-source="binance">Binance</button>
+                </div>
+                <span id="feedStatus" class="metric-pill">模擬行情</span>
+              </div>
+              <div class="segmented-control" aria-label="時間週期">
+                <button class="is-active" data-timeframe="1m">1m</button>
+                <button data-timeframe="5m">5m</button>
+                <button data-timeframe="15m">15m</button>
+                <button data-timeframe="1h">1h</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="ticker-strip">
+            <div>
+              <span>開</span>
+              <strong id="statOpen">--</strong>
+            </div>
+            <div>
+              <span>高</span>
+              <strong id="statHigh">--</strong>
+            </div>
+            <div>
+              <span>低</span>
+              <strong id="statLow">--</strong>
+            </div>
+            <div>
+              <span>量</span>
+              <strong id="statVolume">--</strong>
+            </div>
+          </div>
+
+          <div class="chart-stage">
+            <canvas id="candleCanvas" aria-label="K 線圖"></canvas>
+          </div>
+        </section>
+
+        <aside class="book-panel panel">
+          <div class="panel-header compact">
+            <h2>委託簿</h2>
+            <span id="spreadPill" class="metric-pill">--</span>
+          </div>
+          <div class="book-head">
+            <span>價格</span>
+            <span>數量</span>
+            <span>累計</span>
+          </div>
+          <div id="asks" class="book-side ask-side"></div>
+          <div class="mid-price" id="midPrice">--</div>
+          <div id="bids" class="book-side bid-side"></div>
+
+          <div class="panel-divider"></div>
+          <div class="panel-header compact">
+            <h2>近期成交</h2>
+            <span class="metric-pill">stream</span>
+          </div>
+          <div id="tape" class="tape-list"></div>
+        </aside>
+
+        <aside class="trade-panel panel">
+          <div class="account-overview">
+            <div>
+              <span>總權益</span>
+              <strong id="accountEquity">--</strong>
+            </div>
+            <div>
+              <span>可用 USDT</span>
+              <strong id="availableBalance">--</strong>
+            </div>
+            <div>
+              <span>未實現</span>
+              <strong id="unrealizedPnl">--</strong>
+            </div>
+          </div>
+
+          <div class="mode-row">
+            <div class="segmented-control stretch" aria-label="交易模式">
+              <button class="is-active" data-mode="perp">合約</button>
+              <button data-mode="spot">現貨</button>
+            </div>
+            <button id="resetAccount" class="tiny-action reset-button" title="重設模擬帳戶" aria-label="重設模擬帳戶">
+              重設
+            </button>
+          </div>
+
+          <div class="segmented-control stretch side-control" aria-label="買賣方向">
+            <button class="is-active buy" data-side="buy">買入 / 做多</button>
+            <button class="sell" data-side="sell">賣出 / 做空</button>
+          </div>
+
+          <label class="field">
+            <span>訂單類型</span>
+            <select id="orderType">
+              <option value="market">市價</option>
+              <option value="limit">限價</option>
+            </select>
+          </label>
+
+          <label class="field limit-only is-hidden">
+            <span>限價價格</span>
+            <input id="limitPrice" type="number" min="0" step="0.01" />
+          </label>
+
+          <label class="field">
+            <span>數量</span>
+            <input id="orderQty" type="number" min="0" step="0.001" value="0.05" />
+          </label>
+
+          <label class="field leverage-field">
+            <span>槓桿 <strong id="leverageLabel">10x</strong></span>
+            <input id="leverage" type="range" min="1" max="50" value="10" />
+          </label>
+
+          <div class="order-preview">
+            <div>
+              <span>名目價值</span>
+              <strong id="notionalPreview">--</strong>
+            </div>
+            <div>
+              <span>預估保證金</span>
+              <strong id="marginPreview">--</strong>
+            </div>
+            <div>
+              <span>手續費</span>
+              <strong id="feePreview">--</strong>
+            </div>
+          </div>
+
+          <button id="submitOrder" class="primary-order buy">送出模擬單</button>
+          <p id="orderMessage" class="order-message" role="status"></p>
+        </aside>
+
+        <section class="portfolio-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Portfolio</p>
+              <h2>資產與風控</h2>
+            </div>
+            <div class="metric-cluster">
+              <span id="marginRatio" class="metric-pill">保證金 --</span>
+              <span id="realizedPnl" class="metric-pill">已實現 --</span>
+            </div>
+          </div>
+
+          <div class="asset-dashboard">
+            <div class="asset-profile-line">
+              <div>
+                <p class="eyebrow">Account Analytics</p>
+                <h3 id="assetOwner">訪客模擬帳戶</h3>
+              </div>
+              <span id="assetSyncStatus" class="metric-pill">本機資料</span>
+            </div>
+
+            <div class="asset-stat-grid" aria-label="個人資產總覽">
+              <div class="asset-stat">
+                <span>總資產</span>
+                <strong id="assetEquity">--</strong>
+              </div>
+              <div class="asset-stat">
+                <span>可用資金</span>
+                <strong id="assetAvailable">--</strong>
+              </div>
+              <div class="asset-stat">
+                <span>現貨估值</span>
+                <strong id="assetSpotValue">--</strong>
+              </div>
+              <div class="asset-stat">
+                <span>佔用保證金</span>
+                <strong id="assetMarginUsed">--</strong>
+              </div>
+            </div>
+
+            <div class="performance-grid" aria-label="交易績效統計">
+              <div class="asset-stat performance-stat">
+                <span>ROI</span>
+                <strong id="performanceRoi">--</strong>
+              </div>
+              <div class="asset-stat performance-stat">
+                <span>勝率</span>
+                <strong id="performanceWinRate">--</strong>
+              </div>
+              <div class="asset-stat performance-stat">
+                <span>交易次數</span>
+                <strong id="performanceTrades">--</strong>
+              </div>
+              <div class="asset-stat performance-stat">
+                <span>最大回撤</span>
+                <strong id="performanceDrawdown">--</strong>
+              </div>
+              <div class="asset-stat performance-stat">
+                <span>平均損益</span>
+                <strong id="performanceAveragePnl">--</strong>
+              </div>
+              <div class="asset-stat performance-stat">
+                <span>獲利因子</span>
+                <strong id="performanceProfitFactor">--</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="portfolio-grid">
+            <div class="table-block">
+              <div class="block-title">
+                <h3>持倉</h3>
+              </div>
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>市場</th>
+                      <th>方向</th>
+                      <th>數量</th>
+                      <th>均價</th>
+                      <th>未實現</th>
+                      <th>強平估算</th>
+                    </tr>
+                  </thead>
+                  <tbody id="positionsTable"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="table-block">
+              <div class="block-title">
+                <h3>開放委託</h3>
+              </div>
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>市場</th>
+                      <th>方向</th>
+                      <th>價格</th>
+                      <th>數量</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="ordersTable"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="table-block">
+              <div class="block-title">
+                <h3>交易紀錄</h3>
+              </div>
+              <div id="historyList" class="history-list"></div>
+            </div>
+
+            <div class="insight-block">
+              <div class="block-title">
+                <h3>風控提示</h3>
+              </div>
+              <div id="riskCoach" class="risk-coach"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="onboarding-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Starter Path</p>
+              <h2>新手任務</h2>
+            </div>
+            <span id="onboardingProgress" class="metric-pill">0/5 完成</span>
+          </div>
+          <div id="onboardingList" class="onboarding-list"></div>
+        </section>
+
+        <section class="feed-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Follow Feed</p>
+              <h2>追蹤動態</h2>
+            </div>
+            <div class="metric-cluster">
+              <span id="feedCount" class="metric-pill">0 則</span>
+              <button id="refreshFeed" class="tiny-action" type="button">更新</button>
+            </div>
+          </div>
+          <div class="feed-toolbar" aria-label="追蹤動態篩選">
+            <label class="feed-filter">
+              <span>幣種</span>
+              <select id="feedSymbol">
+                <option value="all">全部</option>
+                <option value="BTCUSDT">BTCUSDT</option>
+                <option value="ETHUSDT">ETHUSDT</option>
+                <option value="SOLUSDT">SOLUSDT</option>
+                <option value="XRPUSDT">XRPUSDT</option>
+              </select>
+            </label>
+            <label class="feed-filter">
+              <span>排序</span>
+              <select id="feedSort">
+                <option value="latest">最新心得</option>
+                <option value="popular">最多讚</option>
+                <option value="comments">最多留言</option>
+                <option value="pnl">損益最高</option>
+              </select>
+            </label>
+            <label class="feed-toggle">
+              <input id="feedHighRatingOnly" type="checkbox" />
+              <span>高評分</span>
+            </label>
+            <button id="resetFeedFilters" class="tiny-action" type="button">重置</button>
+          </div>
+          <div id="feedList" class="feed-list"></div>
+          <p id="feedMessage" class="auth-message feed-message" role="status"></p>
+        </section>
+
+        <section class="leaderboard-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Weekly Arena</p>
+              <h2>排行榜</h2>
+            </div>
+            <span class="metric-pill">虛擬資金</span>
+          </div>
+          <div id="leaderboard" class="leaderboard"></div>
+          <div class="following-block">
+            <div class="block-title">
+              <h3>追蹤中</h3>
+              <span id="followingCount" class="metric-pill">0 人</span>
+            </div>
+            <div id="followingList" class="following-list"></div>
+          </div>
+        </section>
+
+        <section class="alerts-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Coach Alerts</p>
+              <h2>提醒中心</h2>
+            </div>
+            <span id="alertCount" class="metric-pill">0 則提醒</span>
+          </div>
+          <div id="alertsList" class="alerts-list"></div>
+          <div class="notification-block">
+            <div class="block-title">
+              <h3>社交通知</h3>
+              <div class="notification-actions">
+                <span id="notificationCount" class="metric-pill">0 未讀</span>
+                <button id="markNotificationsRead" class="tiny-action" type="button">已讀</button>
+              </div>
+            </div>
+            <div id="notificationList" class="notification-list"></div>
+          </div>
+        </section>
+
+        <section class="learning-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Learning Center</p>
+              <h2>學習中心</h2>
+            </div>
+            <div class="metric-cluster">
+              <span id="learningProgress" class="metric-pill">0/5 完成</span>
+              <span class="metric-pill">模擬教育</span>
+            </div>
+          </div>
+          <div class="learning-note">所有內容僅供模擬學習，不構成投資建議。</div>
+          <div id="learningList" class="learning-list"></div>
+        </section>
+      </main>
+
+      <nav class="mobile-tabbar" aria-label="主要導覽">
+        <button class="is-active" type="button" data-mobile-nav="trade">
+          <span class="mobile-tab-icon trade-icon" aria-hidden="true"></span>
+          <strong>交易</strong>
+        </button>
+        <button type="button" data-mobile-nav="assets">
+          <span class="mobile-tab-icon assets-icon" aria-hidden="true"></span>
+          <strong>資產</strong>
+        </button>
+        <button type="button" data-mobile-nav="social">
+          <span class="mobile-tab-icon social-icon" aria-hidden="true"></span>
+          <strong>動態</strong>
+        </button>
+        <button type="button" data-mobile-nav="learn">
+          <span class="mobile-tab-icon learn-icon" aria-hidden="true"></span>
+          <strong>學習</strong>
+        </button>
+        <button type="button" data-mobile-nav="account">
+          <span class="mobile-tab-icon account-icon" aria-hidden="true"></span>
+          <strong>我的</strong>
+        </button>
+      </nav>
+
+      <div id="authModal" class="auth-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+        <button class="auth-backdrop" type="button" data-auth-close aria-label="關閉登入視窗"></button>
+        <section class="auth-card">
+          <div class="auth-head">
+            <div>
+              <span>NovaX Account</span>
+              <strong id="authTitle">登入帳號</strong>
+            </div>
+            <button id="closeAuth" class="icon-button" type="button" aria-label="關閉登入視窗">X</button>
+          </div>
+
+          <label class="auth-field auth-name-field is-hidden">
+            <span>名稱</span>
+            <input id="authName" type="text" autocomplete="name" />
+          </label>
+          <label class="auth-field">
+            <span>Email</span>
+            <input id="authEmail" type="email" autocomplete="email" />
+          </label>
+          <label class="auth-field">
+            <span>密碼</span>
+            <input id="authPassword" type="password" autocomplete="current-password" />
+          </label>
+          <button id="authSubmit" class="auth-submit" type="button">登入</button>
+          <button id="authModeToggle" class="auth-secondary" type="button">建立新帳號</button>
+          <p id="authMessage" class="auth-message" role="status"></p>
+        </section>
+      </div>
+
+      <div id="profileModal" class="auth-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+        <button class="auth-backdrop" type="button" data-profile-close aria-label="關閉資料視窗"></button>
+        <section class="auth-card">
+          <div class="auth-head">
+            <div>
+              <span>Account Settings</span>
+              <strong id="profileTitle">基本資料</strong>
+            </div>
+            <button id="closeProfile" class="icon-button" type="button" aria-label="關閉資料視窗">X</button>
+          </div>
+
+          <label class="auth-field">
+            <span>名稱</span>
+            <input id="profileName" type="text" autocomplete="name" />
+          </label>
+          <label class="auth-field">
+            <span>Email</span>
+            <input id="profileEmail" type="email" autocomplete="email" />
+          </label>
+          <label class="auth-field">
+            <span>目前密碼</span>
+            <input id="profileCurrentPassword" type="password" autocomplete="current-password" />
+          </label>
+          <label class="auth-field">
+            <span>新密碼</span>
+            <input id="profileNewPassword" type="password" autocomplete="new-password" />
+          </label>
+          <button id="profileSubmit" class="auth-submit" type="button">儲存資料</button>
+          <p id="profileMessage" class="auth-message" role="status"></p>
+        </section>
+      </div>
+
+      <div
+        id="publicProfileModal"
+        class="auth-modal is-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="publicProfileTitle"
+      >
+        <button class="auth-backdrop" type="button" data-public-profile-close aria-label="關閉公開頁"></button>
+        <section class="auth-card public-profile-card">
+          <div class="auth-head">
+            <div>
+              <span>Public Profile</span>
+              <strong id="publicProfileTitle">公開個人頁</strong>
+            </div>
+            <button id="closePublicProfile" class="icon-button" type="button" aria-label="關閉公開頁">X</button>
+          </div>
+
+          <div class="public-profile-summary">
+            <div>
+              <span id="publicProfileMeta">--</span>
+              <strong id="publicProfileName">--</strong>
+            </div>
+            <span id="publicProfileRelation" class="metric-pill">--</span>
+          </div>
+
+          <div id="publicProfileStats" class="public-stat-grid"></div>
+
+          <div class="public-trade-block">
+            <div class="block-title">
+              <h3>近期公開交易</h3>
+            </div>
+            <div id="publicProfileTrades" class="public-trade-list"></div>
+          </div>
+
+          <button id="followProfile" class="auth-submit" type="button">追蹤</button>
+          <p id="publicProfileMessage" class="auth-message" role="status"></p>
+        </section>
+      </div>
+
+      <div
+        id="tradeDetailModal"
+        class="auth-modal is-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tradeDetailTitle"
+      >
+        <button class="auth-backdrop" type="button" data-trade-detail-close aria-label="關閉交易明細"></button>
+        <section class="auth-card trade-detail-card">
+          <div class="auth-head">
+            <div>
+              <span>Trade Detail</span>
+              <strong id="tradeDetailTitle">交易明細</strong>
+            </div>
+            <button id="closeTradeDetail" class="icon-button" type="button" aria-label="關閉交易明細">X</button>
+          </div>
+
+          <div class="trade-detail-summary">
+            <span id="tradeDetailMeta">--</span>
+            <strong id="tradeDetailPnl">--</strong>
+          </div>
+
+          <div id="tradeDetailGrid" class="trade-detail-grid"></div>
+
+          <div class="trade-journal">
+            <div class="journal-head">
+              <div>
+                <span>Review</span>
+                <strong>交易日誌</strong>
+              </div>
+              <span id="journalStatus" class="metric-pill">未檢討</span>
+            </div>
+
+            <div class="journal-grid">
+              <label class="auth-field">
+                <span>策略標籤</span>
+                <select id="journalStrategy">
+                  <option value="">未標記</option>
+                  <option value="breakout">突破</option>
+                  <option value="pullback">回調</option>
+                  <option value="grid">網格</option>
+                  <option value="chase">追單</option>
+                  <option value="reversal">反轉</option>
+                  <option value="test">測試單</option>
+                </select>
+              </label>
+              <label class="auth-field">
+                <span>情緒</span>
+                <select id="journalEmotion">
+                  <option value="">未標記</option>
+                  <option value="calm">冷靜</option>
+                  <option value="hesitant">猶豫</option>
+                  <option value="fomo">FOMO</option>
+                  <option value="revenge">報復性交易</option>
+                  <option value="patient">耐心等待</option>
+                </select>
+              </label>
+              <label class="auth-field">
+                <span>交易評分</span>
+                <select id="journalRating">
+                  <option value="">未評分</option>
+                  <option value="1">1 分</option>
+                  <option value="2">2 分</option>
+                  <option value="3">3 分</option>
+                  <option value="4">4 分</option>
+                  <option value="5">5 分</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="auth-field">
+              <span>筆記</span>
+              <textarea id="journalNote" rows="4" maxlength="600" placeholder="記錄進場理由、出場品質或下次要修正的地方"></textarea>
+            </label>
+            <label class="journal-public-toggle">
+              <input id="journalPublic" type="checkbox" />
+              <span>公開到個人頁</span>
+            </label>
+            <button id="saveTradeJournal" class="auth-submit" type="button">儲存日誌</button>
+            <p id="journalMessage" class="auth-message" role="status"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

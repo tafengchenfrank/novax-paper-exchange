@@ -1,0 +1,17 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>NovaX logo</title>
+  <rect width="128" height="128" rx="22" fill="#07100B"/>
+  <path d="M64 13L111 40V88L64 115L17 88V40L64 13Z" fill="#0F1A14" stroke="#2F4538" stroke-width="4"/>
+  <path d="M34 88V40H47.5L81 77V40H94V88H80.5L47 51V88H34Z" fill="url(#paint0_linear)"/>
+  <path d="M86 31L99 18L108 27L95 40L108 53L99 62L86 49L73 62L64 53L77 40L64 27L73 18L86 31Z" fill="#F3B546"/>
+  <path d="M28 96H100" stroke="#16C784" stroke-width="5" stroke-linecap="round"/>
+  <path d="M42 25V37" stroke="#46B7C7" stroke-width="5" stroke-linecap="round"/>
+  <path d="M58 19V31" stroke="#16C784" stroke-width="5" stroke-linecap="round"/>
+  <path d="M72 97V109" stroke="#46B7C7" stroke-width="5" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="paint0_linear" x1="34" y1="40" x2="94" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16C784"/>
+      <stop offset="1" stop-color="#46B7C7"/>
+    </linearGradient>
+  </defs>
+</svg>

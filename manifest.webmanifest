@@ -1,0 +1,48 @@
+{
+  "name": "NovaX Paper Exchange",
+  "short_name": "NovaX",
+  "description": "A virtual crypto trading simulator with live market data, paper portfolios, risk hints, and rankings.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0f0c",
+  "theme_color": "#0b0f0c",
+  "categories": ["finance", "education", "productivity"],
+  "lang": "zh-Hant",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "assets/novax-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/novax-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/novax-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/novax-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "交易面板",
+      "short_name": "交易",
+      "description": "Open the paper trading terminal.",
+      "url": "/index.html"
+    }
+  ]
+}

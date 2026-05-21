@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: novax-paper-exchange
+    runtime: node
+    plan: free
+    autoDeploy: true
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        sync: false
+      - key: NOVAX_PUBLIC_ORIGIN
+        sync: false
+      - key: NOVAX_SESSION_DAYS
+        value: "14"
+      - key: NOVAX_MAX_JSON_BYTES
+        value: "1000000"

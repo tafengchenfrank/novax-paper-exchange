@@ -20,6 +20,7 @@ HOST=0.0.0.0
 PORT=8787
 NOVAX_PUBLIC_ORIGIN=https://your-domain.example
 NOVAX_SESSION_DAYS=14
+NOVAX_ADMIN_TOKEN=change-this-to-a-long-random-secret
 ```
 
 如果前端和 API 分開部署，再設定：

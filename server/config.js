@@ -20,6 +20,7 @@ const publicOrigin = cleanText(process.env.NOVAX_PUBLIC_ORIGIN || "");
 const sessionDays = numberInRange(process.env.NOVAX_SESSION_DAYS, 1, 90, 14);
 const maxJsonBytes = numberInRange(process.env.NOVAX_MAX_JSON_BYTES, 1000, 5_000_000, 1_000_000);
 const corsOrigins = splitCsv(process.env.NOVAX_CORS_ORIGINS || publicOrigin);
+const adminToken = cleanText(process.env.NOVAX_ADMIN_TOKEN || "");
 
 export const config = {
   nodeEnv,
@@ -36,6 +37,7 @@ export const config = {
   sessionDays,
   maxJsonBytes,
   corsOrigins,
+  adminToken,
 };
 
 export function publicConfigSummary() {
@@ -46,6 +48,7 @@ export function publicConfigSummary() {
     storage: config.storage,
     corsOrigins: config.corsOrigins.length,
     sessionDays: config.sessionDays,
+    adminEnabled: Boolean(config.adminToken),
   };
 }
 

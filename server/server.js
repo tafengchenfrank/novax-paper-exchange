@@ -61,6 +61,47 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/feedback") {
+    const session = await requireUser(request);
+    const body = await readJson(request);
+    const category = cleanFeedbackCategory(body.category);
+    const message = cleanText(body.body, 1000);
+    const contact = cleanText(body.contact, 120);
+    const pagePath = cleanText(body.pagePath, 160);
+    const userAgent = cleanText(request.headers["user-agent"], 220);
+
+    if (message.length < 8) {
+      sendJson(response, 400, { error: "FEEDBACK_TOO_SHORT", message: "請輸入至少 8 個字的回饋內容。" });
+      return;
+    }
+
+    const row = await statements.createFeedback.get(
+      session?.user.id || null,
+      category,
+      message,
+      contact || null,
+      pagePath || null,
+      userAgent || null,
+    );
+    sendJson(response, 201, { feedback: normalizeFeedback(row) });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/feedback") {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+      return;
+    }
+
+    const summary = await statements.getAdminSummary.get();
+    const rows = (await statements.getFeedback.all()).map(normalizeFeedback);
+    sendJson(response, 200, {
+      summary: normalizeAdminSummary(summary),
+      rows,
+    });
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/auth/register") {
     const body = await readJson(request);
     const name = cleanText(body.name, 32);
@@ -504,12 +545,52 @@ function cleanEmail(value) {
   return String(value || "").trim().toLowerCase().slice(0, 254);
 }
 
+function cleanFeedbackCategory(value) {
+  const category = cleanText(value, 24);
+  return ["bug", "idea", "ux", "other"].includes(category) ? category : "other";
+}
+
+function isAdminRequest(request) {
+  if (!config.adminToken) return false;
+  const token = cleanText(request.headers["x-admin-token"], 200);
+  return token && token === config.adminToken;
+}
+
 function normalizeUser(user) {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     createdAt: user.created_at,
+  };
+}
+
+function normalizeFeedback(row) {
+  return {
+    id: row.id,
+    category: cleanFeedbackCategory(row.category),
+    body: cleanText(row.body, 1000),
+    contact: cleanText(row.contact, 120),
+    pagePath: cleanText(row.page_path, 160),
+    userAgent: cleanText(row.user_agent, 220),
+    status: cleanText(row.status, 24) || "new",
+    createdAt: row.created_at,
+    user: row.user_id
+      ? {
+          id: row.user_id,
+          name: cleanText(row.user_name, 32) || "使用者",
+          email: cleanEmail(row.user_email),
+        }
+      : null,
+  };
+}
+
+function normalizeAdminSummary(row) {
+  return {
+    usersCount: Math.max(0, Math.round(finiteNumber(row?.users_count, 0))),
+    syncedAccountsCount: Math.max(0, Math.round(finiteNumber(row?.synced_accounts_count, 0))),
+    feedbackCount: Math.max(0, Math.round(finiteNumber(row?.feedback_count, 0))),
+    newFeedbackCount: Math.max(0, Math.round(finiteNumber(row?.new_feedback_count, 0))),
   };
 }
 

@@ -77,6 +77,19 @@ const sqliteSchema = `
     FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    category TEXT NOT NULL,
+    body TEXT NOT NULL,
+    contact TEXT,
+    page_path TEXT,
+    user_agent TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  );
 `;
 
 const postgresSchema = `
@@ -140,6 +153,18 @@ const postgresSchema = `
     trade_id TEXT,
     body TEXT,
     read_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS feedback (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    category TEXT NOT NULL,
+    body TEXT NOT NULL,
+    contact TEXT,
+    page_path TEXT,
+    user_agent TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 `;
@@ -310,6 +335,36 @@ const statementSql = {
     UPDATE notifications
     SET read_at = CURRENT_TIMESTAMP
     WHERE recipient_id = ? AND read_at IS NULL
+  `,
+  createFeedback: `
+    INSERT INTO feedback (user_id, category, body, contact, page_path, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?)
+    RETURNING id, category, body, contact, page_path, status, created_at
+  `,
+  getFeedback: `
+    SELECT
+      feedback.id,
+      feedback.category,
+      feedback.body,
+      feedback.contact,
+      feedback.page_path,
+      feedback.user_agent,
+      feedback.status,
+      feedback.created_at,
+      users.id AS user_id,
+      users.name AS user_name,
+      users.email AS user_email
+    FROM feedback
+    LEFT JOIN users ON users.id = feedback.user_id
+    ORDER BY feedback.created_at DESC, feedback.id DESC
+    LIMIT 50
+  `,
+  getAdminSummary: `
+    SELECT
+      (SELECT COUNT(*) FROM users) AS users_count,
+      (SELECT COUNT(*) FROM accounts) AS synced_accounts_count,
+      (SELECT COUNT(*) FROM feedback) AS feedback_count,
+      (SELECT COUNT(*) FROM feedback WHERE status = 'new') AS new_feedback_count
   `,
 };
 

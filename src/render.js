@@ -20,6 +20,7 @@ export function renderAll(app) {
   renderLearningCenter(app);
   renderTradeDetail(app);
   renderPublicProfile(app);
+  renderFeedbackModals(app);
   renderLeaderboard(app);
   updateActiveControls(app);
 }
@@ -1034,6 +1035,27 @@ function dateLabel(value) {
   });
 }
 
+function dateTimeLabel(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleString("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function feedbackCategoryLabel(value) {
+  return {
+    bug: "功能異常",
+    ux: "操作卡住",
+    idea: "功能建議",
+    other: "其他",
+  }[value] || "其他";
+}
+
 function renderAuth(app) {
   const signedIn = Boolean(app.user);
   if (signedIn && app.authModalOpen) {
@@ -1057,6 +1079,50 @@ function renderAuth(app) {
   if (signedIn) {
     app.els.authUserName.textContent = app.user.name;
   }
+}
+
+function renderFeedbackModals(app) {
+  app.els.feedbackModal.classList.toggle("is-hidden", !app.feedbackModalOpen);
+  app.els.feedbackSubmit.disabled = app.feedbackBusy;
+  app.els.feedbackSubmit.textContent = app.feedbackBusy ? "送出中..." : "送出回饋";
+
+  app.els.adminFeedbackModal.classList.toggle("is-hidden", !app.adminFeedbackOpen);
+  app.els.loadAdminFeedback.disabled = app.adminFeedbackBusy;
+  app.els.loadAdminFeedback.textContent = app.adminFeedbackBusy ? "載入中..." : "載入回饋";
+  renderAdminFeedback(app);
+}
+
+function renderAdminFeedback(app) {
+  const summary = app.adminFeedbackSummary;
+  app.els.adminFeedbackSummary.innerHTML = summary
+    ? `
+        <div><span>註冊帳號</span><strong>${escapeHtml(summary.usersCount)}</strong></div>
+        <div><span>已同步帳號</span><strong>${escapeHtml(summary.syncedAccountsCount)}</strong></div>
+        <div><span>總回饋</span><strong>${escapeHtml(summary.feedbackCount)}</strong></div>
+        <div><span>新回饋</span><strong>${escapeHtml(summary.newFeedbackCount)}</strong></div>
+      `
+    : "";
+
+  app.els.adminFeedbackList.innerHTML =
+    app.adminFeedbackRows
+      .map(
+        (item) => `
+          <article class="admin-feedback-item">
+            <div class="admin-feedback-head">
+              <span>${escapeHtml(feedbackCategoryLabel(item.category))} · ${dateTimeLabel(item.createdAt)}</span>
+              <strong>${escapeHtml(item.user?.name || item.contact || "匿名使用者")}</strong>
+            </div>
+            <p>${escapeHtml(item.body)}</p>
+            <dl>
+              <div><dt>聯絡</dt><dd>${escapeHtml(item.contact || item.user?.email || "--")}</dd></div>
+              <div><dt>頁面</dt><dd>${escapeHtml(item.pagePath || "--")}</dd></div>
+              <div><dt>狀態</dt><dd>${escapeHtml(item.status || "new")}</dd></div>
+            </dl>
+          </article>
+        `,
+      )
+      .join("") ||
+    (summary ? `<div class="empty-state admin-feedback-empty">目前還沒有回饋。</div>` : "");
 }
 
 function updateActiveControls(app) {

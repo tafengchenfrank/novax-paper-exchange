@@ -5,6 +5,7 @@ const testAccountPattern = "e2e-%@novax.local";
 
 test.afterEach(() => {
   db.prepare("DELETE FROM users WHERE email LIKE ?").run(testAccountPattern);
+  db.prepare("DELETE FROM feedback WHERE body LIKE ?").run("E2E feedback%");
 });
 
 test("renders the trading shell and switches market controls", async ({ page }) => {
@@ -18,6 +19,14 @@ test("renders the trading shell and switches market controls", async ({ page }) 
   await expect(page.locator("#legalBody")).toContainText("不構成投資建議");
   await page.locator("#closeLegal").click();
   await expect(page.locator("#legalModal")).toBeHidden();
+  await page.locator("[data-feedback-open]").click();
+  await expect(page.locator("#feedbackModal")).toBeVisible();
+  await page.locator("#feedbackCategory").selectOption("idea");
+  await page.locator("#feedbackBody").fill("E2E feedback: 希望新增更多教學任務。");
+  await page.locator("#feedbackSubmit").click();
+  await expect(page.locator("#feedbackMessage")).toHaveText("謝謝，你的回饋已送出。");
+  await page.locator("#closeFeedback").click();
+  await expect(page.locator("#feedbackModal")).toBeHidden();
   await expect(page.locator("#marketTitle")).toContainText("BTCUSDT");
   await expect(page.locator("#candleCanvas")).toBeVisible();
 

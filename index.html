@@ -457,6 +457,8 @@
       <footer class="legal-footer" aria-label="法律與政策">
         <span>NovaX Paper Exchange · Beta</span>
         <div>
+          <button type="button" data-feedback-open>回饋</button>
+          <button type="button" data-admin-feedback-open>管理回饋</button>
           <button type="button" data-legal-doc="terms">使用條款</button>
           <button type="button" data-legal-doc="privacy">隱私權政策</button>
           <button type="button" data-legal-doc="risk">風險聲明</button>
@@ -681,6 +683,67 @@
             <button id="closeLegal" class="icon-button" type="button" aria-label="關閉政策視窗">X</button>
           </div>
           <div id="legalBody" class="legal-body"></div>
+        </section>
+      </div>
+
+      <div id="feedbackModal" class="auth-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+        <button class="auth-backdrop" type="button" data-feedback-close aria-label="關閉回饋視窗"></button>
+        <section class="auth-card feedback-card">
+          <div class="auth-head">
+            <div>
+              <span>Beta Feedback</span>
+              <strong id="feedbackTitle">回報問題 / 提建議</strong>
+            </div>
+            <button id="closeFeedback" class="icon-button" type="button" aria-label="關閉回饋視窗">X</button>
+          </div>
+
+          <label class="auth-field">
+            <span>類型</span>
+            <select id="feedbackCategory">
+              <option value="bug">功能異常</option>
+              <option value="ux">操作卡住</option>
+              <option value="idea">功能建議</option>
+              <option value="other">其他</option>
+            </select>
+          </label>
+          <label class="auth-field">
+            <span>內容</span>
+            <textarea id="feedbackBody" rows="5" maxlength="1000" placeholder="描述你遇到的問題、當時在哪個頁面，或希望新增的功能"></textarea>
+          </label>
+          <label class="auth-field">
+            <span>聯絡方式（選填）</span>
+            <input id="feedbackContact" type="text" maxlength="120" autocomplete="email" />
+          </label>
+          <button id="feedbackSubmit" class="auth-submit" type="button">送出回饋</button>
+          <p id="feedbackMessage" class="auth-message" role="status"></p>
+        </section>
+      </div>
+
+      <div
+        id="adminFeedbackModal"
+        class="auth-modal is-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adminFeedbackTitle"
+      >
+        <button class="auth-backdrop" type="button" data-admin-feedback-close aria-label="關閉管理回饋視窗"></button>
+        <section class="auth-card admin-feedback-card">
+          <div class="auth-head">
+            <div>
+              <span>Admin</span>
+              <strong id="adminFeedbackTitle">Beta 回饋管理</strong>
+            </div>
+            <button id="closeAdminFeedback" class="icon-button" type="button" aria-label="關閉管理回饋視窗">X</button>
+          </div>
+
+          <label class="auth-field">
+            <span>Admin Token</span>
+            <input id="adminFeedbackToken" type="password" autocomplete="off" />
+          </label>
+          <button id="loadAdminFeedback" class="auth-submit" type="button">載入回饋</button>
+          <p id="adminFeedbackMessage" class="auth-message" role="status"></p>
+          <div id="adminFeedbackSummary" class="admin-summary"></div>
+          <div id="adminFeedbackList" class="admin-feedback-list"></div>
         </section>
       </div>
     </div>

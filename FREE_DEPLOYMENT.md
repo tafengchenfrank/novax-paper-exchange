@@ -51,9 +51,11 @@ Plan: Free
 ```text
 DATABASE_URL=你的 Neon connection string
 NOVAX_PUBLIC_ORIGIN=https://你的-render網址.onrender.com
+NOVAX_ADMIN_TOKEN=一串只有你知道的長密碼
 ```
 
 `NODE_ENV`、`HOST`、`NOVAX_SESSION_DAYS`、`NOVAX_MAX_JSON_BYTES` 已經寫在 `render.yaml`。
+`NOVAX_ADMIN_TOKEN` 用於網站底部的「管理回饋」入口，不要放進 GitHub。
 
 ## 5. 部署後檢查
 

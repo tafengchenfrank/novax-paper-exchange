@@ -112,6 +112,21 @@ export async function commentOnPublicTrade(userId, tradeId, body) {
   });
 }
 
+export async function submitFeedback({ category, body, contact, pagePath }) {
+  return request("/api/feedback", {
+    method: "POST",
+    body: { category, body, contact, pagePath },
+    auth: Boolean(getToken()),
+  });
+}
+
+export async function getAdminFeedback(adminToken) {
+  return request("/api/admin/feedback", {
+    headers: { "X-Admin-Token": adminToken },
+    auth: false,
+  });
+}
+
 function buildAccountPayload(app) {
   const account = calculateAccount(app);
   return {
@@ -142,6 +157,7 @@ async function request(path, options = {}) {
     Accept: "application/json",
     ...(options.body ? { "Content-Type": "application/json" } : {}),
     ...(options.auth !== false && token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
   };
 
   const response = await fetch(path, {

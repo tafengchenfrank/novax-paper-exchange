@@ -5,6 +5,7 @@ import {
   followUser,
   getFollowing,
   getFollowingFeed,
+  getAdminFeedback,
   getLeaderboard,
   getMe,
   getNotifications,
@@ -16,6 +17,7 @@ import {
   markNotificationsRead,
   registerAccount,
   syncRemoteAccount,
+  submitFeedback,
   likePublicTrade,
   unfollowUser,
   unlikePublicTrade,
@@ -106,6 +108,12 @@ const app = {
   profileBusy: false,
   legalModalOpen: false,
   activeLegalDoc: "risk",
+  feedbackModalOpen: false,
+  feedbackBusy: false,
+  adminFeedbackOpen: false,
+  adminFeedbackBusy: false,
+  adminFeedbackRows: [],
+  adminFeedbackSummary: null,
   publicProfileOpen: false,
   publicProfileBusy: false,
   selectedPublicProfileId: null,
@@ -450,6 +458,36 @@ function bindEvents(app) {
       closeLegalModal(app);
     }
   });
+  app.els.feedbackOpenButtons.forEach((button) => {
+    button.addEventListener("click", () => openFeedbackModal(app));
+  });
+  app.els.closeFeedback.addEventListener("click", () => closeFeedbackModal(app));
+  app.els.feedbackModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.feedbackClose !== undefined) {
+      closeFeedbackModal(app);
+    }
+  });
+  app.els.feedbackSubmit.addEventListener("click", () => submitFeedbackForm(app));
+  app.els.feedbackBody.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      submitFeedbackForm(app);
+    }
+  });
+  app.els.adminFeedbackOpenButtons.forEach((button) => {
+    button.addEventListener("click", () => openAdminFeedbackModal(app));
+  });
+  app.els.closeAdminFeedback.addEventListener("click", () => closeAdminFeedbackModal(app));
+  app.els.adminFeedbackModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.adminFeedbackClose !== undefined) {
+      closeAdminFeedbackModal(app);
+    }
+  });
+  app.els.loadAdminFeedback.addEventListener("click", () => loadAdminFeedback(app));
+  app.els.adminFeedbackToken.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      loadAdminFeedback(app);
+    }
+  });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (app.tradeDetailOpen) {
@@ -462,6 +500,10 @@ function bindEvents(app) {
       closeAuthModal(app);
     } else if (app.legalModalOpen) {
       closeLegalModal(app);
+    } else if (app.feedbackModalOpen) {
+      closeFeedbackModal(app);
+    } else if (app.adminFeedbackOpen) {
+      closeAdminFeedbackModal(app);
     }
   });
   window.addEventListener("resize", () => renderAll(app));
@@ -752,6 +794,91 @@ function closeLegalModal(app) {
   app.legalModalOpen = false;
   app.els.legalModal.classList.add("is-hidden");
   renderAll(app);
+}
+
+function openFeedbackModal(app) {
+  app.feedbackModalOpen = true;
+  app.els.feedbackContact.value = app.user?.email || app.els.feedbackContact.value || "";
+  setFeedbackMessage(app, "");
+  renderAll(app);
+  app.els.feedbackBody.focus();
+}
+
+function closeFeedbackModal(app) {
+  app.feedbackModalOpen = false;
+  setFeedbackMessage(app, "");
+  renderAll(app);
+}
+
+async function submitFeedbackForm(app) {
+  if (app.feedbackBusy) return;
+
+  const body = app.els.feedbackBody.value.trim();
+  if (body.length < 8) {
+    setFeedbackMessage(app, "請輸入至少 8 個字的回饋內容。", "error");
+    return;
+  }
+
+  app.feedbackBusy = true;
+  setFeedbackMessage(app, "送出中...");
+  renderAll(app);
+
+  try {
+    await submitFeedback({
+      category: app.els.feedbackCategory.value,
+      body,
+      contact: app.els.feedbackContact.value.trim(),
+      pagePath: window.location.pathname + window.location.hash,
+    });
+    app.els.feedbackBody.value = "";
+    setFeedbackMessage(app, "謝謝，你的回饋已送出。", "ok");
+  } catch (error) {
+    setFeedbackMessage(app, error.message, "error");
+  } finally {
+    app.feedbackBusy = false;
+    renderAll(app);
+  }
+}
+
+function openAdminFeedbackModal(app) {
+  app.adminFeedbackOpen = true;
+  app.els.adminFeedbackToken.value = sessionStorage.getItem("novax-admin-token") || "";
+  setAdminFeedbackMessage(app, "");
+  renderAll(app);
+  app.els.adminFeedbackToken.focus();
+}
+
+function closeAdminFeedbackModal(app) {
+  app.adminFeedbackOpen = false;
+  setAdminFeedbackMessage(app, "");
+  renderAll(app);
+}
+
+async function loadAdminFeedback(app) {
+  if (app.adminFeedbackBusy) return;
+
+  const token = app.els.adminFeedbackToken.value.trim();
+  if (!token) {
+    setAdminFeedbackMessage(app, "請輸入 Render 環境變數 NOVAX_ADMIN_TOKEN。", "error");
+    return;
+  }
+
+  app.adminFeedbackBusy = true;
+  setAdminFeedbackMessage(app, "載入中...");
+  renderAll(app);
+
+  try {
+    const data = await getAdminFeedback(token);
+    sessionStorage.setItem("novax-admin-token", token);
+    app.adminFeedbackSummary = data.summary;
+    app.adminFeedbackRows = data.rows || [];
+    setAdminFeedbackMessage(app, `已載入 ${app.adminFeedbackRows.length} 則最新回饋。`, "ok");
+  } catch (error) {
+    setAdminFeedbackMessage(app, error.message, "error");
+  } finally {
+    app.adminFeedbackBusy = false;
+    renderAll(app);
+  }
 }
 
 function closeProfileModal(app) {
@@ -1134,7 +1261,9 @@ function updateMobileNavFromScroll(app) {
     app.profileModalOpen ||
     app.publicProfileOpen ||
     app.tradeDetailOpen ||
-    app.legalModalOpen
+    app.legalModalOpen ||
+    app.feedbackModalOpen ||
+    app.adminFeedbackOpen
   ) {
     return;
   }
@@ -1216,4 +1345,14 @@ function setFeedMessage(app, message, tone = "") {
 function setJournalMessage(app, message, tone = "") {
   app.els.journalMessage.textContent = message;
   app.els.journalMessage.className = `auth-message ${tone}`;
+}
+
+function setFeedbackMessage(app, message, tone = "") {
+  app.els.feedbackMessage.textContent = message;
+  app.els.feedbackMessage.className = `auth-message ${tone}`;
+}
+
+function setAdminFeedbackMessage(app, message, tone = "") {
+  app.els.adminFeedbackMessage.textContent = message;
+  app.els.adminFeedbackMessage.className = `auth-message ${tone}`;
 }

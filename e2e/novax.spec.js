@@ -124,6 +124,31 @@ test("registers, edits profile, and logs in with the updated password", async ({
     password: "password456",
   });
   await expect(page.locator("#authUserName")).toHaveText("E2E Captain");
+
+  await page.locator("#logoutAccount").click();
+  await page.locator("#openAuth").click();
+  await page.locator("#authForgotPassword").click();
+  await expect(page.locator("#forgotPasswordModal")).toBeVisible();
+  await page.locator("#forgotPasswordEmail").fill(newEmail);
+  await page.locator("#forgotPasswordSubmit").click();
+  await expect(page.locator("#forgotPasswordMessage")).toHaveText("本機測試重設連結已建立。");
+  const resetHref = await page.locator("#forgotPasswordDevLink a").getAttribute("href");
+  expect(resetHref).toBeTruthy();
+
+  await page.goto(resetHref);
+  await expect(page.locator("#resetPasswordModal")).toBeVisible();
+  await page.locator("#resetPasswordNew").fill("password789");
+  await page.locator("#resetPasswordConfirm").fill("password789");
+  await page.locator("#resetPasswordSubmit").click();
+  await expect(page.locator("#authSignedIn")).toBeVisible();
+  await expect(page.locator("#authUserName")).toHaveText("E2E Captain");
+
+  await page.locator("#logoutAccount").click();
+  await loginViaUi(page, {
+    email: newEmail,
+    password: "password789",
+  });
+  await expect(page.locator("#authUserName")).toHaveText("E2E Captain");
 });
 
 test("opens public profiles and follows another trader", async ({ page }) => {

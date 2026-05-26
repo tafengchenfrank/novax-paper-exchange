@@ -478,6 +478,22 @@ button {
   color: var(--soft);
 }
 
+.auth-link-button {
+  width: 100%;
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.auth-link-button:hover {
+  color: var(--green);
+}
+
 .auth-message {
   min-height: 18px;
   margin: 8px 0 0;
@@ -492,6 +508,19 @@ button {
 
 .auth-message.ok {
   color: var(--green);
+}
+
+.auth-helper {
+  min-height: 18px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.auth-helper a {
+  color: var(--cyan);
 }
 
 .top-stats div,

@@ -1,9 +1,11 @@
 import { createReadStream, existsSync } from "node:fs";
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import { createSession, hashPassword, hashToken, requireUser, verifyPassword } from "./auth.js";
 import { config, publicConfigSummary } from "./config.js";
 import { closeDatabase, statements } from "./db.js";
+import { sendPasswordResetEmail } from "./email.js";
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -264,6 +266,84 @@ async function handleApi(request, response, url) {
 
     const session = await createSession(user.id);
     sendJson(response, 200, { user: normalizeUser(user), ...session });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/auth/forgot-password") {
+    const body = await readJson(request);
+    const email = cleanEmail(body.email);
+    if (!email.includes("@")) {
+      sendJson(response, 400, { error: "INVALID_EMAIL", message: "請輸入有效 email。" });
+      return;
+    }
+
+    await statements.deleteStalePasswordResets.run(new Date().toISOString());
+    const user = await statements.getUserByEmail.get(email);
+    let devResetUrl = "";
+
+    if (user) {
+      const token = randomBytes(32).toString("base64url");
+      const tokenHash = hashToken(token);
+      const expiresAt = new Date(Date.now() + config.passwordResetMinutes * 60 * 1000).toISOString();
+      await statements.markUserPasswordResetsUsed.run(user.id);
+      await statements.createPasswordReset.run(user.id, tokenHash, expiresAt);
+      const resetUrl = buildPasswordResetUrl(request, token);
+
+      if (config.email.enabled) {
+        try {
+          await sendPasswordResetEmail(user, resetUrl);
+        } catch (error) {
+          console.error(error);
+          await statements.markUserPasswordResetsUsed.run(user.id);
+          sendJson(response, 502, {
+            error: "EMAIL_FAILED",
+            message: "重設信暫時寄送失敗，請稍後再試。",
+          });
+          return;
+        }
+      } else if (!config.isProduction) {
+        devResetUrl = resetUrl;
+      }
+    }
+
+    sendJson(response, 202, {
+      ok: true,
+      emailEnabled: config.email.enabled,
+      message: config.email.enabled
+        ? "如果這個 email 有註冊，我們會寄出重設密碼連結。"
+        : "目前尚未啟用寄信服務，請聯絡管理者協助重設密碼。",
+      ...(devResetUrl ? { devResetUrl } : {}),
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/auth/reset-password") {
+    const body = await readJson(request);
+    const resetToken = cleanText(body.token, 220);
+    const password = String(body.password || "");
+
+    if (!resetToken) {
+      sendJson(response, 400, { error: "MISSING_TOKEN", message: "重設連結不完整。" });
+      return;
+    }
+    if (password.length < 8) {
+      sendJson(response, 400, { error: "WEAK_PASSWORD", message: "新密碼至少 8 碼。" });
+      return;
+    }
+
+    await statements.deleteStalePasswordResets.run(new Date().toISOString());
+    const reset = await statements.getPasswordReset.get(hashToken(resetToken));
+    if (!reset || reset.used_at || new Date(reset.expires_at).getTime() <= Date.now()) {
+      sendJson(response, 400, { error: "RESET_EXPIRED", message: "重設連結已失效，請重新申請。" });
+      return;
+    }
+
+    const { hash, salt } = hashPassword(password);
+    await statements.updateUserPassword.run(hash, salt, reset.user_id);
+    await statements.markPasswordResetUsed.run(reset.reset_id);
+    await statements.deleteUserSessions.run(reset.user_id);
+    const session = await createSession(reset.user_id);
+    sendJson(response, 200, { user: normalizeUser(reset), ...session });
     return;
   }
 
@@ -669,6 +749,24 @@ function cleanText(value, maxLength) {
 
 function cleanEmail(value) {
   return String(value || "").trim().toLowerCase().slice(0, 254);
+}
+
+function buildPasswordResetUrl(request, token) {
+  const origin = config.publicOrigin || requestOrigin(request);
+  const url = new URL(origin || "http://127.0.0.1:8787");
+  url.pathname = "/";
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("reset_token", token);
+  return url.toString();
+}
+
+function requestOrigin(request) {
+  const host = cleanText(request.headers.host, 120);
+  if (!host) return "";
+  const forwardedProto = cleanText(request.headers["x-forwarded-proto"], 20).split(",")[0];
+  const proto = forwardedProto || (config.isProduction ? "https" : "http");
+  return `${proto}://${host}`;
 }
 
 function cleanFeedbackCategory(value) {

@@ -22,6 +22,16 @@ const sqliteSchema = `
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS accounts (
     user_id INTEGER PRIMARY KEY,
     snapshot TEXT NOT NULL,
@@ -142,6 +152,15 @@ const postgresSchema = `
     expires_at TIMESTAMPTZ NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ
+  );
+
   CREATE TABLE IF NOT EXISTS accounts (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     snapshot TEXT NOT NULL,
@@ -255,7 +274,40 @@ const statementSql = {
     WHERE sessions.token_hash = ?
   `,
   deleteSession: "DELETE FROM sessions WHERE token_hash = ?",
+  deleteUserSessions: "DELETE FROM sessions WHERE user_id = ?",
   deleteExpiredSessions: "DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP",
+  createPasswordReset: `
+    INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+    VALUES (?, ?, ?)
+  `,
+  getPasswordReset: `
+    SELECT
+      password_reset_tokens.id AS reset_id,
+      password_reset_tokens.user_id,
+      password_reset_tokens.expires_at,
+      password_reset_tokens.used_at,
+      users.id,
+      users.name,
+      users.email,
+      users.created_at
+    FROM password_reset_tokens
+    JOIN users ON users.id = password_reset_tokens.user_id
+    WHERE password_reset_tokens.token_hash = ?
+  `,
+  markPasswordResetUsed: `
+    UPDATE password_reset_tokens
+    SET used_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `,
+  markUserPasswordResetsUsed: `
+    UPDATE password_reset_tokens
+    SET used_at = CURRENT_TIMESTAMP
+    WHERE user_id = ? AND used_at IS NULL
+  `,
+  deleteStalePasswordResets: `
+    DELETE FROM password_reset_tokens
+    WHERE used_at IS NOT NULL OR expires_at <= ?
+  `,
   upsertAccount: `
     INSERT INTO accounts (user_id, snapshot, equity, roi, trades_count, updated_at)
     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)

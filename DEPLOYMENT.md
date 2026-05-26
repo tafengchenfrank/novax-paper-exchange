@@ -21,6 +21,7 @@ PORT=8787
 NOVAX_PUBLIC_ORIGIN=https://your-domain.example
 NOVAX_SESSION_DAYS=14
 NOVAX_ADMIN_TOKEN=change-this-to-a-long-random-secret
+NOVAX_PASSWORD_RESET_MINUTES=30
 ```
 
 如果前端和 API 分開部署，再設定：
@@ -39,6 +40,16 @@ NOVAX_DATABASE_PATH=/var/lib/novax/novax.sqlite
 # 免費 Render + Neon：改用 PostgreSQL
 DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 ```
+
+忘記密碼功能使用 Resend 寄重設連結：
+
+```bash
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
+NOVAX_EMAIL_FROM="NovaX <noreply@your-domain.example>"
+NOVAX_SUPPORT_EMAIL=support@your-domain.example
+```
+
+沒有設定 `RESEND_API_KEY` 與 `NOVAX_EMAIL_FROM` 時，production 不會寄出重設信；本機 development 會在畫面顯示測試用連結。
 
 ## 2. 啟動檢查
 

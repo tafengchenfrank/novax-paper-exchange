@@ -1133,6 +1133,9 @@ function renderAuth(app) {
   if (signedIn && app.authModalOpen) {
     app.authModalOpen = false;
   }
+  if (signedIn && app.forgotPasswordOpen) {
+    app.forgotPasswordOpen = false;
+  }
   if (!signedIn && app.profileModalOpen) {
     app.profileModalOpen = false;
   }
@@ -1140,11 +1143,22 @@ function renderAuth(app) {
   app.els.authGuest.classList.toggle("is-hidden", signedIn);
   app.els.authSignedIn.classList.toggle("is-hidden", !signedIn);
   app.els.authModal.classList.toggle("is-hidden", !app.authModalOpen || signedIn);
+  app.els.forgotPasswordModal.classList.toggle("is-hidden", !app.forgotPasswordOpen || signedIn);
+  app.els.resetPasswordModal.classList.toggle("is-hidden", !app.resetPasswordOpen);
   app.els.profileModal.classList.toggle("is-hidden", !app.profileModalOpen || !signedIn);
   app.els.authNameField.classList.toggle("is-hidden", app.authMode !== "register");
+  app.els.authForgotPassword.classList.toggle("is-hidden", app.authMode !== "login");
   app.els.authTitle.textContent = app.authMode === "register" ? "建立帳號" : "登入帳號";
   app.els.authModeToggle.textContent = app.authMode === "register" ? "已有帳號，登入" : "建立新帳號";
   app.els.authSubmit.textContent = app.authMode === "register" ? "註冊" : "登入";
+  app.els.authSubmit.disabled = app.authBusy;
+  app.els.forgotPasswordSubmit.disabled = app.forgotPasswordBusy;
+  app.els.forgotPasswordSubmit.textContent = app.forgotPasswordBusy ? "處理中..." : "寄出重設連結";
+  app.els.forgotPasswordDevLink.innerHTML = app.forgotPasswordDevUrl
+    ? `本機測試連結：<a href="${escapeHtml(app.forgotPasswordDevUrl)}">開啟重設頁</a>`
+    : "";
+  app.els.resetPasswordSubmit.disabled = app.resetPasswordBusy;
+  app.els.resetPasswordSubmit.textContent = app.resetPasswordBusy ? "更新中..." : "更新密碼";
   app.els.profileSubmit.disabled = app.profileBusy;
   app.els.profileSubmit.textContent = app.profileBusy ? "儲存中..." : "儲存資料";
 

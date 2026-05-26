@@ -7,7 +7,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "check": "node --check app.js && node --check service-worker.js && node --check src/main.js && node --check src/api.js && node --check src/alerts.js && node --check src/config.js && node --check src/dom.js && node --check src/formatters.js && node --check src/learning.js && node --check src/storage.js && node --check src/market-data.js && node --check src/market-sim.js && node --check src/binance-feed.js && node --check src/portfolio.js && node --check src/orders.js && node --check src/chart.js && node --check src/render.js && node --check src/pwa.js && node --check server/config.js && node --check server/server.js && node --check server/db.js && node --check server/auth.js && node --check server/doctor.js",
+    "check": "node --check app.js && node --check service-worker.js && node --check src/main.js && node --check src/api.js && node --check src/alerts.js && node --check src/config.js && node --check src/dom.js && node --check src/formatters.js && node --check src/learning.js && node --check src/storage.js && node --check src/market-data.js && node --check src/market-sim.js && node --check src/binance-feed.js && node --check src/portfolio.js && node --check src/orders.js && node --check src/chart.js && node --check src/render.js && node --check src/pwa.js && node --check server/config.js && node --check server/email.js && node --check server/server.js && node --check server/db.js && node --check server/auth.js && node --check server/doctor.js",
     "start": "node server/server.js",
     "serve": "node server/server.js",
     "doctor": "node server/doctor.js",

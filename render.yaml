@@ -20,5 +20,13 @@ services:
         value: "14"
       - key: NOVAX_MAX_JSON_BYTES
         value: "1000000"
+      - key: NOVAX_PASSWORD_RESET_MINUTES
+        value: "30"
       - key: NOVAX_ADMIN_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: NOVAX_EMAIL_FROM
+        sync: false
+      - key: NOVAX_SUPPORT_EMAIL
         sync: false

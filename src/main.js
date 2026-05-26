@@ -17,6 +17,8 @@ import {
   logoutAccount,
   markNotificationsRead,
   registerAccount,
+  requestPasswordReset,
+  resetPassword,
   reportContent,
   hideModerationComment,
   hideModerationTrade,
@@ -63,11 +65,11 @@ const legalDocuments = {
       <p><strong>最後更新：2026-05-21</strong></p>
       <p>本政策說明 NovaX Beta 可能收集、使用與保存的資料類型。這是一份產品 Beta 用的基礎版本，正式商業化前應再由專業法務審閱。</p>
       <h3>1. 我們收集的資料</h3>
-      <p>平台可能保存你的帳號名稱、email、密碼雜湊、登入 session、模擬資產快照、交易紀錄、學習進度、公開交易日誌、按讚、留言、追蹤關係與系統操作紀錄。</p>
+      <p>平台可能保存你的帳號名稱、email、密碼雜湊、登入 session、密碼重設 token、模擬資產快照、交易紀錄、學習進度、公開交易日誌、按讚、留言、追蹤關係與系統操作紀錄。</p>
       <h3>2. 資料用途</h3>
       <p>資料會用於登入驗證、同步模擬進度、顯示排行榜、提供公開個人頁與追蹤動態、改善產品體驗、排查錯誤與維護服務安全。</p>
       <h3>3. 資料保存與第三方服務</h3>
-      <p>正式 Beta 目前部署於 Render，資料庫使用 Neon PostgreSQL。這些服務可能依其基礎設施處理與保存資料。請不要在平台輸入敏感個資、真實資產資訊或交易所 API 金鑰。</p>
+      <p>正式 Beta 目前部署於 Render，資料庫使用 Neon PostgreSQL，密碼重設信可能透過 Resend 等郵件服務寄送。這些服務可能依其基礎設施處理與保存資料。請不要在平台輸入敏感個資、真實資產資訊或交易所 API 金鑰。</p>
       <h3>4. 資料分享</h3>
       <p>我們不會出售你的個人資料。公開交易日誌、留言、按讚與追蹤行為會依產品設計顯示給其他使用者。</p>
       <h3>5. 使用者選擇</h3>
@@ -110,6 +112,12 @@ const app = {
   authMode: "login",
   authModalOpen: false,
   authBusy: false,
+  forgotPasswordOpen: false,
+  forgotPasswordBusy: false,
+  forgotPasswordDevUrl: "",
+  resetPasswordOpen: false,
+  resetPasswordBusy: false,
+  resetPasswordToken: "",
   profileModalOpen: false,
   profileBusy: false,
   legalModalOpen: false,
@@ -179,6 +187,8 @@ const app = {
 app.activeSymbol = app.state.activeSymbol || app.activeSymbol;
 app.selectedMode = app.state.selectedMode || app.selectedMode;
 app.marketSource = app.state.marketSource || app.marketSource;
+app.resetPasswordToken = new URLSearchParams(window.location.search).get("reset_token") || "";
+app.resetPasswordOpen = Boolean(app.resetPasswordToken);
 
 registerServiceWorker();
 seedMarkets(app, "sim");
@@ -420,11 +430,38 @@ function bindEvents(app) {
     setAuthMessage(app, "");
     renderAll(app);
   });
+  app.els.authForgotPassword.addEventListener("click", () => openForgotPasswordModal(app));
   app.els.authSubmit.addEventListener("click", () => submitAuth(app));
   [app.els.authName, app.els.authEmail, app.els.authPassword].forEach((input) => {
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         submitAuth(app);
+      }
+    });
+  });
+  app.els.closeForgotPassword.addEventListener("click", () => closeForgotPasswordModal(app));
+  app.els.forgotPasswordModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.forgotPasswordClose !== undefined) {
+      closeForgotPasswordModal(app);
+    }
+  });
+  app.els.forgotPasswordSubmit.addEventListener("click", () => submitForgotPassword(app));
+  app.els.forgotPasswordEmail.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      submitForgotPassword(app);
+    }
+  });
+  app.els.closeResetPassword.addEventListener("click", () => closeResetPasswordModal(app));
+  app.els.resetPasswordModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.resetPasswordClose !== undefined) {
+      closeResetPasswordModal(app);
+    }
+  });
+  app.els.resetPasswordSubmit.addEventListener("click", () => submitResetPassword(app));
+  [app.els.resetPasswordNew, app.els.resetPasswordConfirm].forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        submitResetPassword(app);
       }
     });
   });
@@ -575,6 +612,10 @@ function bindEvents(app) {
       closeProfileModal(app);
     } else if (app.authModalOpen) {
       closeAuthModal(app);
+    } else if (app.forgotPasswordOpen) {
+      closeForgotPasswordModal(app);
+    } else if (app.resetPasswordOpen) {
+      closeResetPasswordModal(app);
     } else if (app.legalModalOpen) {
       closeLegalModal(app);
     } else if (app.feedbackModalOpen) {
@@ -641,6 +682,114 @@ async function submitAuth(app) {
     app.authBusy = false;
     renderAll(app);
   }
+}
+
+function openForgotPasswordModal(app) {
+  app.authModalOpen = false;
+  app.forgotPasswordOpen = true;
+  app.forgotPasswordDevUrl = "";
+  app.els.forgotPasswordEmail.value = app.els.authEmail.value.trim();
+  setForgotPasswordMessage(app, "");
+  renderAll(app);
+  app.els.forgotPasswordEmail.focus();
+}
+
+function closeForgotPasswordModal(app) {
+  app.forgotPasswordOpen = false;
+  app.forgotPasswordDevUrl = "";
+  setForgotPasswordMessage(app, "");
+  renderAll(app);
+}
+
+async function submitForgotPassword(app) {
+  if (app.forgotPasswordBusy) return;
+
+  const email = app.els.forgotPasswordEmail.value.trim();
+  if (!email.includes("@")) {
+    setForgotPasswordMessage(app, "請輸入有效 email。", "error");
+    return;
+  }
+
+  app.forgotPasswordBusy = true;
+  app.forgotPasswordDevUrl = "";
+  setForgotPasswordMessage(app, "正在處理重設申請...");
+  renderAll(app);
+
+  try {
+    const result = await requestPasswordReset(email);
+    app.forgotPasswordDevUrl = result.devResetUrl || "";
+    setForgotPasswordMessage(
+      app,
+      result.devResetUrl ? "本機測試重設連結已建立。" : result.message,
+      result.emailEnabled || result.devResetUrl ? "ok" : "error",
+    );
+  } catch (error) {
+    setForgotPasswordMessage(app, error.message, "error");
+  } finally {
+    app.forgotPasswordBusy = false;
+    renderAll(app);
+  }
+}
+
+function closeResetPasswordModal(app) {
+  app.resetPasswordOpen = false;
+  app.resetPasswordToken = "";
+  app.els.resetPasswordNew.value = "";
+  app.els.resetPasswordConfirm.value = "";
+  setResetPasswordMessage(app, "");
+  clearResetTokenFromUrl();
+  renderAll(app);
+}
+
+async function submitResetPassword(app) {
+  if (app.resetPasswordBusy) return;
+
+  const password = app.els.resetPasswordNew.value;
+  const confirm = app.els.resetPasswordConfirm.value;
+  if (!app.resetPasswordToken) {
+    setResetPasswordMessage(app, "重設連結不完整，請重新申請。", "error");
+    return;
+  }
+  if (password.length < 8) {
+    setResetPasswordMessage(app, "新密碼至少 8 碼。", "error");
+    return;
+  }
+  if (password !== confirm) {
+    setResetPasswordMessage(app, "兩次輸入的新密碼不一致。", "error");
+    return;
+  }
+
+  app.resetPasswordBusy = true;
+  setResetPasswordMessage(app, "正在更新密碼...");
+  renderAll(app);
+
+  try {
+    const result = await resetPassword({ token: app.resetPasswordToken, password });
+    app.user = result.user;
+    app.resetPasswordOpen = false;
+    app.resetPasswordToken = "";
+    app.els.resetPasswordNew.value = "";
+    app.els.resetPasswordConfirm.value = "";
+    clearResetTokenFromUrl();
+    setAuthMessage(app, "密碼已更新，已為你登入。", "ok");
+    await restoreRemoteSnapshot(app);
+    await refreshLeaderboard(app);
+    await refreshFollowing(app);
+    await refreshFeed(app, { silent: true });
+    await refreshNotifications(app, { silent: true });
+  } catch (error) {
+    setResetPasswordMessage(app, error.message, "error");
+  } finally {
+    app.resetPasswordBusy = false;
+    renderAll(app);
+  }
+}
+
+function clearResetTokenFromUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("reset_token")) return;
+  url.searchParams.delete("reset_token");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function openProfileModal(app) {
@@ -1473,6 +1622,8 @@ function updateMobileNavFromScroll(app) {
     Date.now() < app.mobileNavLockedUntil ||
     window.innerWidth > 820 ||
     app.authModalOpen ||
+    app.forgotPasswordOpen ||
+    app.resetPasswordOpen ||
     app.profileModalOpen ||
     app.publicProfileOpen ||
     app.tradeDetailOpen ||
@@ -1542,6 +1693,16 @@ function saveTradeJournal(app) {
 function setAuthMessage(app, message, tone = "") {
   app.els.authMessage.textContent = message;
   app.els.authMessage.className = `auth-message ${tone}`;
+}
+
+function setForgotPasswordMessage(app, message, tone = "") {
+  app.els.forgotPasswordMessage.textContent = message;
+  app.els.forgotPasswordMessage.className = `auth-message ${tone}`;
+}
+
+function setResetPasswordMessage(app, message, tone = "") {
+  app.els.resetPasswordMessage.textContent = message;
+  app.els.resetPasswordMessage.className = `auth-message ${tone}`;
 }
 
 function setProfileMessage(app, message, tone = "") {

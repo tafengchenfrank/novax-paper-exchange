@@ -31,6 +31,24 @@ export async function loginAccount({ email, password }) {
   return data;
 }
 
+export async function requestPasswordReset(email) {
+  return request("/api/auth/forgot-password", {
+    method: "POST",
+    body: { email },
+    auth: false,
+  });
+}
+
+export async function resetPassword({ token, password }) {
+  const data = await request("/api/auth/reset-password", {
+    method: "POST",
+    body: { token, password },
+    auth: false,
+  });
+  localStorage.setItem(tokenKey, data.token);
+  return data;
+}
+
 export async function logoutAccount() {
   try {
     await request("/api/auth/logout", { method: "POST" });

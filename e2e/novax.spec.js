@@ -4,6 +4,7 @@ import { db } from "../server/db.js";
 const testAccountPattern = "e2e-%@novax.local";
 
 test.afterEach(() => {
+  db.prepare("DELETE FROM content_reports WHERE details LIKE ?").run("E2E report%");
   db.prepare("DELETE FROM users WHERE email LIKE ?").run(testAccountPattern);
   db.prepare("DELETE FROM feedback WHERE body LIKE ?").run("E2E feedback%");
 });
@@ -180,6 +181,22 @@ test("opens public profiles and follows another trader", async ({ page }) => {
   await page.locator('[data-post-comment]').first().click();
   await expect(page.locator("#publicProfileMessage")).toHaveText("留言已送出。");
   await expect(page.locator("#publicProfileTrades")).toContainText("這筆紀律很清楚。");
+  await page.locator("[data-report-comment]").first().click();
+  await expect(page.locator("#reportModal")).toBeVisible();
+  await page.locator("#reportReason").selectOption("misleading");
+  await page.locator("#reportDetails").fill("E2E report: 這則留言需要管理者確認。");
+  await page.locator("#reportSubmit").click();
+  await expect(page.locator("#reportMessage")).toHaveText("檢舉已送出，管理者會查看。");
+  await page.locator("#closeReport").click();
+  await expect(page.locator("#reportModal")).toBeHidden();
+  await page.locator("[data-report-trade]").first().click();
+  await expect(page.locator("#reportModal")).toBeVisible();
+  await page.locator("#reportReason").selectOption("other");
+  await page.locator("#reportDetails").fill("E2E report: 這筆公開交易需要管理者確認。");
+  await page.locator("#reportSubmit").click();
+  await expect(page.locator("#reportMessage")).toHaveText("檢舉已送出，管理者會查看。");
+  await page.locator("#closeReport").click();
+  await expect(page.locator("#reportModal")).toBeHidden();
 
   await page.locator("#followProfile").click();
   await expect(page.locator("#publicProfileRelation")).toHaveText("已追蹤");

@@ -90,6 +90,38 @@ const sqliteSchema = `
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
   );
+
+  CREATE TABLE IF NOT EXISTS hidden_public_trades (
+    owner_id INTEGER NOT NULL,
+    trade_id TEXT NOT NULL,
+    reason TEXT,
+    hidden_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (owner_id, trade_id),
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS hidden_trade_comments (
+    comment_id INTEGER PRIMARY KEY,
+    reason TEXT,
+    hidden_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (comment_id) REFERENCES trade_comments(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS content_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id INTEGER NOT NULL,
+    target_type TEXT NOT NULL,
+    owner_id INTEGER,
+    trade_id TEXT,
+    comment_id INTEGER,
+    reason TEXT NOT NULL,
+    details TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (comment_id) REFERENCES trade_comments(id) ON DELETE CASCADE
+  );
 `;
 
 const postgresSchema = `
@@ -165,6 +197,33 @@ const postgresSchema = `
     page_path TEXT,
     user_agent TEXT,
     status TEXT NOT NULL DEFAULT 'new',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS hidden_public_trades (
+    owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    trade_id TEXT NOT NULL,
+    reason TEXT,
+    hidden_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (owner_id, trade_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hidden_trade_comments (
+    comment_id INTEGER PRIMARY KEY REFERENCES trade_comments(id) ON DELETE CASCADE,
+    reason TEXT,
+    hidden_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS content_reports (
+    id SERIAL PRIMARY KEY,
+    reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_type TEXT NOT NULL,
+    owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    trade_id TEXT,
+    comment_id INTEGER REFERENCES trade_comments(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL,
+    details TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 `;
@@ -306,9 +365,26 @@ const statementSql = {
       users.name AS author_name
     FROM trade_comments
     JOIN users ON users.id = trade_comments.author_id
+    LEFT JOIN hidden_trade_comments ON hidden_trade_comments.comment_id = trade_comments.id
     WHERE trade_comments.owner_id = ? AND trade_comments.trade_id = ?
+      AND hidden_trade_comments.comment_id IS NULL
     ORDER BY trade_comments.created_at ASC, trade_comments.id ASC
     LIMIT 20
+  `,
+  getTradeCommentById: `
+    SELECT
+      trade_comments.id,
+      trade_comments.owner_id,
+      trade_comments.trade_id,
+      trade_comments.author_id,
+      trade_comments.body,
+      trade_comments.created_at,
+      users.name AS author_name,
+      hidden_trade_comments.comment_id AS hidden_comment_id
+    FROM trade_comments
+    JOIN users ON users.id = trade_comments.author_id
+    LEFT JOIN hidden_trade_comments ON hidden_trade_comments.comment_id = trade_comments.id
+    WHERE trade_comments.id = ?
   `,
   createNotification: `
     INSERT INTO notifications (recipient_id, actor_id, type, owner_id, trade_id, body)
@@ -365,6 +441,99 @@ const statementSql = {
       (SELECT COUNT(*) FROM accounts) AS synced_accounts_count,
       (SELECT COUNT(*) FROM feedback) AS feedback_count,
       (SELECT COUNT(*) FROM feedback WHERE status = 'new') AS new_feedback_count
+  `,
+  getHiddenTradeKeys: "SELECT owner_id, trade_id FROM hidden_public_trades",
+  getHiddenComment: "SELECT comment_id FROM hidden_trade_comments WHERE comment_id = ?",
+  hideTrade: `
+    INSERT INTO hidden_public_trades (owner_id, trade_id, reason, hidden_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(owner_id, trade_id) DO UPDATE SET
+      reason = excluded.reason,
+      hidden_at = CURRENT_TIMESTAMP
+  `,
+  unhideTrade: "DELETE FROM hidden_public_trades WHERE owner_id = ? AND trade_id = ?",
+  hideComment: `
+    INSERT INTO hidden_trade_comments (comment_id, reason, hidden_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(comment_id) DO UPDATE SET
+      reason = excluded.reason,
+      hidden_at = CURRENT_TIMESTAMP
+  `,
+  unhideComment: "DELETE FROM hidden_trade_comments WHERE comment_id = ?",
+  createContentReport: `
+    INSERT INTO content_reports (reporter_id, target_type, owner_id, trade_id, comment_id, reason, details)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    RETURNING id, target_type, owner_id, trade_id, comment_id, reason, details, status, created_at
+  `,
+  getContentReports: `
+    SELECT
+      content_reports.id,
+      content_reports.target_type,
+      content_reports.owner_id,
+      content_reports.trade_id,
+      content_reports.comment_id,
+      content_reports.reason,
+      content_reports.details,
+      content_reports.status,
+      content_reports.created_at,
+      reporter.id AS reporter_id,
+      reporter.name AS reporter_name,
+      owner.name AS owner_name,
+      trade_comments.body AS comment_body,
+      author.name AS comment_author_name
+    FROM content_reports
+    JOIN users reporter ON reporter.id = content_reports.reporter_id
+    LEFT JOIN users owner ON owner.id = content_reports.owner_id
+    LEFT JOIN trade_comments ON trade_comments.id = content_reports.comment_id
+    LEFT JOIN users author ON author.id = trade_comments.author_id
+    ORDER BY content_reports.created_at DESC, content_reports.id DESC
+    LIMIT 50
+  `,
+  getHiddenTrades: `
+    SELECT
+      hidden_public_trades.owner_id,
+      hidden_public_trades.trade_id,
+      hidden_public_trades.reason,
+      hidden_public_trades.hidden_at,
+      users.name AS owner_name
+    FROM hidden_public_trades
+    JOIN users ON users.id = hidden_public_trades.owner_id
+    ORDER BY hidden_public_trades.hidden_at DESC
+    LIMIT 50
+  `,
+  getHiddenComments: `
+    SELECT
+      hidden_trade_comments.comment_id,
+      hidden_trade_comments.reason,
+      hidden_trade_comments.hidden_at,
+      trade_comments.owner_id,
+      trade_comments.trade_id,
+      trade_comments.body,
+      author.name AS author_name,
+      owner.name AS owner_name
+    FROM hidden_trade_comments
+    JOIN trade_comments ON trade_comments.id = hidden_trade_comments.comment_id
+    JOIN users author ON author.id = trade_comments.author_id
+    JOIN users owner ON owner.id = trade_comments.owner_id
+    ORDER BY hidden_trade_comments.hidden_at DESC
+    LIMIT 50
+  `,
+  getModerationSummary: `
+    SELECT
+      (SELECT COUNT(*) FROM content_reports) AS reports_count,
+      (SELECT COUNT(*) FROM content_reports WHERE status = 'open') AS open_reports_count,
+      (SELECT COUNT(*) FROM hidden_public_trades) AS hidden_trades_count,
+      (SELECT COUNT(*) FROM hidden_trade_comments) AS hidden_comments_count
+  `,
+  markTradeReportsActioned: `
+    UPDATE content_reports
+    SET status = 'actioned'
+    WHERE target_type = 'trade' AND owner_id = ? AND trade_id = ? AND status = 'open'
+  `,
+  markCommentReportsActioned: `
+    UPDATE content_reports
+    SET status = 'actioned'
+    WHERE target_type = 'comment' AND comment_id = ? AND status = 'open'
   `,
 };
 

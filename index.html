@@ -459,6 +459,7 @@
         <div>
           <button type="button" data-feedback-open>回饋</button>
           <button type="button" data-admin-feedback-open>管理回饋</button>
+          <button type="button" data-admin-moderation-open>內容管理</button>
           <button type="button" data-legal-doc="terms">使用條款</button>
           <button type="button" data-legal-doc="privacy">隱私權政策</button>
           <button type="button" data-legal-doc="risk">風險聲明</button>
@@ -744,6 +745,64 @@
           <p id="adminFeedbackMessage" class="auth-message" role="status"></p>
           <div id="adminFeedbackSummary" class="admin-summary"></div>
           <div id="adminFeedbackList" class="admin-feedback-list"></div>
+        </section>
+      </div>
+
+      <div id="reportModal" class="auth-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+        <button class="auth-backdrop" type="button" data-report-close aria-label="關閉檢舉視窗"></button>
+        <section class="auth-card feedback-card">
+          <div class="auth-head">
+            <div>
+              <span>Content Report</span>
+              <strong id="reportTitle">檢舉內容</strong>
+            </div>
+            <button id="closeReport" class="icon-button" type="button" aria-label="關閉檢舉視窗">X</button>
+          </div>
+
+          <label class="auth-field">
+            <span>原因</span>
+            <select id="reportReason">
+              <option value="spam">垃圾訊息</option>
+              <option value="abuse">攻擊或騷擾</option>
+              <option value="misleading">誤導性投資內容</option>
+              <option value="personal">個資或敏感資訊</option>
+              <option value="other">其他</option>
+            </select>
+          </label>
+          <label class="auth-field">
+            <span>補充說明（選填）</span>
+            <textarea id="reportDetails" rows="4" maxlength="500" placeholder="簡短說明為什麼你認為這個內容不適合"></textarea>
+          </label>
+          <button id="reportSubmit" class="auth-submit" type="button">送出檢舉</button>
+          <p id="reportMessage" class="auth-message" role="status"></p>
+        </section>
+      </div>
+
+      <div
+        id="adminModerationModal"
+        class="auth-modal is-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adminModerationTitle"
+      >
+        <button class="auth-backdrop" type="button" data-admin-moderation-close aria-label="關閉內容管理視窗"></button>
+        <section class="auth-card admin-feedback-card">
+          <div class="auth-head">
+            <div>
+              <span>Moderation</span>
+              <strong id="adminModerationTitle">內容管理</strong>
+            </div>
+            <button id="closeAdminModeration" class="icon-button" type="button" aria-label="關閉內容管理視窗">X</button>
+          </div>
+
+          <label class="auth-field">
+            <span>Admin Token</span>
+            <input id="adminModerationToken" type="password" autocomplete="off" />
+          </label>
+          <button id="loadAdminModeration" class="auth-submit" type="button">載入檢舉與隱藏內容</button>
+          <p id="adminModerationMessage" class="auth-message" role="status"></p>
+          <div id="adminModerationSummary" class="admin-summary"></div>
+          <div id="adminModerationList" class="admin-feedback-list"></div>
         </section>
       </div>
     </div>

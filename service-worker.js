@@ -1,4 +1,4 @@
-const CACHE_VERSION = "novax-pwa-v27";
+const CACHE_VERSION = "novax-pwa-v28";
 const APP_SHELL = [
   "/",
   "/index.html",

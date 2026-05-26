@@ -6,6 +6,7 @@ import {
   getFollowing,
   getFollowingFeed,
   getAdminFeedback,
+  getAdminModeration,
   getLeaderboard,
   getMe,
   getNotifications,
@@ -16,9 +17,14 @@ import {
   logoutAccount,
   markNotificationsRead,
   registerAccount,
+  reportContent,
+  hideModerationComment,
+  hideModerationTrade,
   syncRemoteAccount,
   submitFeedback,
   likePublicTrade,
+  unhideModerationComment,
+  unhideModerationTrade,
   unfollowUser,
   unlikePublicTrade,
   updateProfile,
@@ -114,6 +120,12 @@ const app = {
   adminFeedbackBusy: false,
   adminFeedbackRows: [],
   adminFeedbackSummary: null,
+  reportModalOpen: false,
+  reportBusy: false,
+  reportTarget: null,
+  adminModerationOpen: false,
+  adminModerationBusy: false,
+  adminModerationData: null,
   publicProfileOpen: false,
   publicProfileBusy: false,
   selectedPublicProfileId: null,
@@ -334,8 +346,27 @@ function bindEvents(app) {
     const profileButton = event.target?.closest?.("[data-feed-profile]");
     const likeButton = event.target?.closest?.("[data-feed-like]");
     const commentButton = event.target?.closest?.("[data-feed-post-comment]");
+    const reportTradeButton = event.target?.closest?.("[data-feed-report-trade]");
+    const reportCommentButton = event.target?.closest?.("[data-feed-report-comment]");
     if (profileButton) {
       openPublicProfile(app, profileButton.dataset.feedProfile);
+      return;
+    }
+    if (reportTradeButton) {
+      openReportModal(app, {
+        targetType: "trade",
+        ownerId: reportTradeButton.dataset.reportOwner,
+        tradeId: reportTradeButton.dataset.feedReportTrade,
+      });
+      return;
+    }
+    if (reportCommentButton) {
+      openReportModal(app, {
+        targetType: "comment",
+        ownerId: reportCommentButton.dataset.reportOwner,
+        tradeId: reportCommentButton.dataset.reportTrade,
+        commentId: reportCommentButton.dataset.feedReportComment,
+      });
       return;
     }
     if (likeButton) {
@@ -419,6 +450,25 @@ function bindEvents(app) {
   app.els.publicProfileTrades.addEventListener("click", (event) => {
     const likeButton = event.target?.closest?.("[data-like-trade]");
     const commentButton = event.target?.closest?.("[data-post-comment]");
+    const reportTradeButton = event.target?.closest?.("[data-report-trade]");
+    const reportCommentButton = event.target?.closest?.("[data-report-comment]");
+    if (reportTradeButton) {
+      openReportModal(app, {
+        targetType: "trade",
+        ownerId: app.publicProfile?.id,
+        tradeId: reportTradeButton.dataset.reportTrade,
+      });
+      return;
+    }
+    if (reportCommentButton) {
+      openReportModal(app, {
+        targetType: "comment",
+        ownerId: app.publicProfile?.id,
+        tradeId: reportCommentButton.dataset.reportTrade,
+        commentId: reportCommentButton.dataset.reportComment,
+      });
+      return;
+    }
     if (likeButton) {
       togglePublicTradeLike(app, likeButton.dataset.likeTrade);
       return;
@@ -488,6 +538,33 @@ function bindEvents(app) {
       loadAdminFeedback(app);
     }
   });
+  app.els.closeReport.addEventListener("click", () => closeReportModal(app));
+  app.els.reportModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.reportClose !== undefined) {
+      closeReportModal(app);
+    }
+  });
+  app.els.reportSubmit.addEventListener("click", () => submitReportForm(app));
+  app.els.adminModerationOpenButtons.forEach((button) => {
+    button.addEventListener("click", () => openAdminModerationModal(app));
+  });
+  app.els.closeAdminModeration.addEventListener("click", () => closeAdminModerationModal(app));
+  app.els.adminModerationModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.adminModerationClose !== undefined) {
+      closeAdminModerationModal(app);
+    }
+  });
+  app.els.loadAdminModeration.addEventListener("click", () => loadAdminModeration(app));
+  app.els.adminModerationToken.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      loadAdminModeration(app);
+    }
+  });
+  app.els.adminModerationList.addEventListener("click", (event) => {
+    const action = event.target?.closest?.("[data-moderation-action]");
+    if (!action) return;
+    handleModerationAction(app, action.dataset.moderationAction, action.dataset);
+  });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (app.tradeDetailOpen) {
@@ -504,6 +581,10 @@ function bindEvents(app) {
       closeFeedbackModal(app);
     } else if (app.adminFeedbackOpen) {
       closeAdminFeedbackModal(app);
+    } else if (app.reportModalOpen) {
+      closeReportModal(app);
+    } else if (app.adminModerationOpen) {
+      closeAdminModerationModal(app);
     }
   });
   window.addEventListener("resize", () => renderAll(app));
@@ -877,6 +958,140 @@ async function loadAdminFeedback(app) {
     setAdminFeedbackMessage(app, error.message, "error");
   } finally {
     app.adminFeedbackBusy = false;
+    renderAll(app);
+  }
+}
+
+function openReportModal(app, target) {
+  if (!app.user) {
+    app.authMode = "login";
+    app.authModalOpen = true;
+    setAuthMessage(app, "登入後才能檢舉內容。", "error");
+    renderAll(app);
+    app.els.authEmail.focus();
+    return;
+  }
+
+  app.reportTarget = target;
+  app.reportModalOpen = true;
+  app.els.reportReason.value = "spam";
+  app.els.reportDetails.value = "";
+  setReportMessage(app, "");
+  renderAll(app);
+  app.els.reportReason.focus();
+}
+
+function closeReportModal(app) {
+  app.reportModalOpen = false;
+  app.reportTarget = null;
+  setReportMessage(app, "");
+  renderAll(app);
+}
+
+async function submitReportForm(app) {
+  if (app.reportBusy || !app.reportTarget) return;
+
+  app.reportBusy = true;
+  setReportMessage(app, "送出檢舉中...");
+  renderAll(app);
+
+  try {
+    await reportContent({
+      ...app.reportTarget,
+      reason: app.els.reportReason.value,
+      details: app.els.reportDetails.value.trim(),
+    });
+    setReportMessage(app, "檢舉已送出，管理者會查看。", "ok");
+  } catch (error) {
+    setReportMessage(app, error.message, "error");
+  } finally {
+    app.reportBusy = false;
+    renderAll(app);
+  }
+}
+
+function openAdminModerationModal(app) {
+  app.adminModerationOpen = true;
+  app.els.adminModerationToken.value = sessionStorage.getItem("novax-admin-token") || "";
+  setAdminModerationMessage(app, "");
+  renderAll(app);
+  app.els.adminModerationToken.focus();
+}
+
+function closeAdminModerationModal(app) {
+  app.adminModerationOpen = false;
+  setAdminModerationMessage(app, "");
+  renderAll(app);
+}
+
+async function loadAdminModeration(app) {
+  if (app.adminModerationBusy) return;
+
+  const token = app.els.adminModerationToken.value.trim();
+  if (!token) {
+    setAdminModerationMessage(app, "請輸入 Render 環境變數 NOVAX_ADMIN_TOKEN。", "error");
+    return;
+  }
+
+  app.adminModerationBusy = true;
+  setAdminModerationMessage(app, "載入中...");
+  renderAll(app);
+
+  try {
+    app.adminModerationData = await getAdminModeration(token);
+    sessionStorage.setItem("novax-admin-token", token);
+    setAdminModerationMessage(app, "內容管理資料已更新。", "ok");
+  } catch (error) {
+    setAdminModerationMessage(app, error.message, "error");
+  } finally {
+    app.adminModerationBusy = false;
+    renderAll(app);
+  }
+}
+
+async function handleModerationAction(app, action, dataset) {
+  const token = app.els.adminModerationToken.value.trim();
+  if (!token || app.adminModerationBusy) return;
+
+  const reason =
+    action.startsWith("hide")
+      ? window.prompt("請輸入隱藏原因", "違反社群規範") || "違反社群規範"
+      : "";
+  app.adminModerationBusy = true;
+  setAdminModerationMessage(app, "處理中...");
+  renderAll(app);
+
+  try {
+    if (action === "hide-trade") {
+      await hideModerationTrade(token, {
+        ownerId: dataset.ownerId,
+        tradeId: dataset.tradeId,
+        reason,
+      });
+    } else if (action === "unhide-trade") {
+      await unhideModerationTrade(token, {
+        ownerId: dataset.ownerId,
+        tradeId: dataset.tradeId,
+      });
+    } else if (action === "hide-comment") {
+      await hideModerationComment(token, {
+        commentId: dataset.commentId,
+        reason,
+      });
+    } else if (action === "unhide-comment") {
+      await unhideModerationComment(token, {
+        commentId: dataset.commentId,
+      });
+    }
+
+    app.adminModerationData = await getAdminModeration(token);
+    await refreshFeed(app, { silent: true, force: true });
+    if (app.publicProfileOpen) await refreshPublicProfile(app);
+    setAdminModerationMessage(app, "已更新內容狀態。", "ok");
+  } catch (error) {
+    setAdminModerationMessage(app, error.message, "error");
+  } finally {
+    app.adminModerationBusy = false;
     renderAll(app);
   }
 }
@@ -1263,7 +1478,9 @@ function updateMobileNavFromScroll(app) {
     app.tradeDetailOpen ||
     app.legalModalOpen ||
     app.feedbackModalOpen ||
-    app.adminFeedbackOpen
+    app.adminFeedbackOpen ||
+    app.reportModalOpen ||
+    app.adminModerationOpen
   ) {
     return;
   }
@@ -1355,4 +1572,14 @@ function setFeedbackMessage(app, message, tone = "") {
 function setAdminFeedbackMessage(app, message, tone = "") {
   app.els.adminFeedbackMessage.textContent = message;
   app.els.adminFeedbackMessage.className = `auth-message ${tone}`;
+}
+
+function setReportMessage(app, message, tone = "") {
+  app.els.reportMessage.textContent = message;
+  app.els.reportMessage.className = `auth-message ${tone}`;
+}
+
+function setAdminModerationMessage(app, message, tone = "") {
+  app.els.adminModerationMessage.textContent = message;
+  app.els.adminModerationMessage.className = `auth-message ${tone}`;
 }

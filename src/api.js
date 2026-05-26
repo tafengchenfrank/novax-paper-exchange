@@ -127,6 +127,56 @@ export async function getAdminFeedback(adminToken) {
   });
 }
 
+export async function reportContent({ targetType, ownerId, tradeId, commentId, reason, details }) {
+  return request("/api/reports", {
+    method: "POST",
+    body: { targetType, ownerId, tradeId, commentId, reason, details },
+  });
+}
+
+export async function getAdminModeration(adminToken) {
+  return request("/api/admin/moderation", {
+    headers: { "X-Admin-Token": adminToken },
+    auth: false,
+  });
+}
+
+export async function hideModerationTrade(adminToken, { ownerId, tradeId, reason }) {
+  return request("/api/admin/moderation/trades/hide", {
+    method: "POST",
+    headers: { "X-Admin-Token": adminToken },
+    body: { ownerId, tradeId, reason },
+    auth: false,
+  });
+}
+
+export async function unhideModerationTrade(adminToken, { ownerId, tradeId }) {
+  return request("/api/admin/moderation/trades/unhide", {
+    method: "POST",
+    headers: { "X-Admin-Token": adminToken },
+    body: { ownerId, tradeId },
+    auth: false,
+  });
+}
+
+export async function hideModerationComment(adminToken, { commentId, reason }) {
+  return request("/api/admin/moderation/comments/hide", {
+    method: "POST",
+    headers: { "X-Admin-Token": adminToken },
+    body: { commentId, reason },
+    auth: false,
+  });
+}
+
+export async function unhideModerationComment(adminToken, { commentId }) {
+  return request("/api/admin/moderation/comments/unhide", {
+    method: "POST",
+    headers: { "X-Admin-Token": adminToken },
+    body: { commentId },
+    auth: false,
+  });
+}
+
 function buildAccountPayload(app) {
   const account = calculateAccount(app);
   return {

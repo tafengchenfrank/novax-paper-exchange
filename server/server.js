@@ -102,6 +102,132 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/reports") {
+    const session = await requireUser(request);
+    if (!session) {
+      sendJson(response, 401, { error: "UNAUTHENTICATED", message: "請先登入後再檢舉內容。" });
+      return;
+    }
+
+    const body = await readJson(request);
+    const targetType = cleanReportTarget(body.targetType);
+    const reason = cleanReportReason(body.reason);
+    const details = cleanText(body.details, 500);
+    let ownerId = Number(body.ownerId) || null;
+    let tradeId = cleanText(body.tradeId, 64);
+    const commentId = Number(body.commentId) || null;
+
+    if (targetType === "trade") {
+      if (!ownerId || !tradeId || !(await findPublicTrade(ownerId, tradeId))) {
+        sendJson(response, 404, { error: "TRADE_NOT_FOUND", message: "找不到可檢舉的公開交易。" });
+        return;
+      }
+    } else if (targetType === "comment") {
+      const comment = commentId ? await statements.getTradeCommentById.get(commentId) : null;
+      if (!comment || comment.hidden_comment_id || !(await findPublicTrade(comment.owner_id, comment.trade_id))) {
+        sendJson(response, 404, { error: "COMMENT_NOT_FOUND", message: "找不到可檢舉的留言。" });
+        return;
+      }
+      ownerId = comment.owner_id;
+      tradeId = cleanText(comment.trade_id, 64);
+    } else {
+      sendJson(response, 400, { error: "BAD_TARGET", message: "檢舉目標不正確。" });
+      return;
+    }
+
+    const row = await statements.createContentReport.get(
+      session.user.id,
+      targetType,
+      ownerId,
+      tradeId || null,
+      commentId,
+      reason,
+      details || null,
+    );
+    sendJson(response, 201, { report: normalizeContentReport(row) });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/moderation") {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+      return;
+    }
+
+    sendJson(response, 200, {
+      summary: normalizeModerationSummary(await statements.getModerationSummary.get()),
+      reports: (await statements.getContentReports.all()).map(normalizeContentReport),
+      hiddenTrades: (await statements.getHiddenTrades.all()).map(normalizeHiddenTrade),
+      hiddenComments: (await statements.getHiddenComments.all()).map(normalizeHiddenComment),
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/moderation/trades/hide") {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+      return;
+    }
+
+    const body = await readJson(request);
+    const ownerId = Number(body.ownerId);
+    const tradeId = cleanText(body.tradeId, 64);
+    const reason = cleanText(body.reason, 240) || "違反社群規範";
+    if (!ownerId || !tradeId || !(await findPublicTrade(ownerId, tradeId, { includeHidden: true }))) {
+      sendJson(response, 404, { error: "TRADE_NOT_FOUND", message: "找不到公開交易。" });
+      return;
+    }
+
+    await statements.hideTrade.run(ownerId, tradeId, reason);
+    await statements.markTradeReportsActioned.run(ownerId, tradeId);
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/moderation/trades/unhide") {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+      return;
+    }
+
+    const body = await readJson(request);
+    await statements.unhideTrade.run(Number(body.ownerId), cleanText(body.tradeId, 64));
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/moderation/comments/hide") {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+      return;
+    }
+
+    const body = await readJson(request);
+    const commentId = Number(body.commentId);
+    const reason = cleanText(body.reason, 240) || "違反社群規範";
+    if (!commentId || !(await statements.getTradeCommentById.get(commentId))) {
+      sendJson(response, 404, { error: "COMMENT_NOT_FOUND", message: "找不到留言。" });
+      return;
+    }
+
+    await statements.hideComment.run(commentId, reason);
+    await statements.markCommentReportsActioned.run(commentId);
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/moderation/comments/unhide") {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+      return;
+    }
+
+    const body = await readJson(request);
+    await statements.unhideComment.run(Number(body.commentId));
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/auth/register") {
     const body = await readJson(request);
     const name = cleanText(body.name, 32);
@@ -550,6 +676,16 @@ function cleanFeedbackCategory(value) {
   return ["bug", "idea", "ux", "other"].includes(category) ? category : "other";
 }
 
+function cleanReportTarget(value) {
+  const target = cleanText(value, 24);
+  return ["trade", "comment"].includes(target) ? target : "";
+}
+
+function cleanReportReason(value) {
+  const reason = cleanText(value, 32);
+  return ["spam", "abuse", "misleading", "personal", "other"].includes(reason) ? reason : "other";
+}
+
 function isAdminRequest(request) {
   if (!config.adminToken) return false;
   const token = cleanText(request.headers["x-admin-token"], 200);
@@ -594,6 +730,61 @@ function normalizeAdminSummary(row) {
   };
 }
 
+function normalizeContentReport(row) {
+  return {
+    id: row.id,
+    targetType: cleanReportTarget(row.target_type),
+    ownerId: row.owner_id,
+    tradeId: cleanText(row.trade_id, 64),
+    commentId: row.comment_id,
+    reason: cleanReportReason(row.reason),
+    details: cleanText(row.details, 500),
+    status: cleanText(row.status, 24) || "open",
+    createdAt: row.created_at,
+    reporter: row.reporter_id
+      ? {
+          id: row.reporter_id,
+          name: cleanText(row.reporter_name, 32) || "使用者",
+        }
+      : null,
+    ownerName: cleanText(row.owner_name, 32),
+    commentBody: cleanText(row.comment_body, 240),
+    commentAuthorName: cleanText(row.comment_author_name, 32),
+  };
+}
+
+function normalizeModerationSummary(row) {
+  return {
+    reportsCount: Math.max(0, Math.round(finiteNumber(row?.reports_count, 0))),
+    openReportsCount: Math.max(0, Math.round(finiteNumber(row?.open_reports_count, 0))),
+    hiddenTradesCount: Math.max(0, Math.round(finiteNumber(row?.hidden_trades_count, 0))),
+    hiddenCommentsCount: Math.max(0, Math.round(finiteNumber(row?.hidden_comments_count, 0))),
+  };
+}
+
+function normalizeHiddenTrade(row) {
+  return {
+    ownerId: row.owner_id,
+    ownerName: cleanText(row.owner_name, 32) || "使用者",
+    tradeId: cleanText(row.trade_id, 64),
+    reason: cleanText(row.reason, 240),
+    hiddenAt: row.hidden_at,
+  };
+}
+
+function normalizeHiddenComment(row) {
+  return {
+    commentId: row.comment_id,
+    ownerId: row.owner_id,
+    ownerName: cleanText(row.owner_name, 32) || "使用者",
+    tradeId: cleanText(row.trade_id, 64),
+    body: cleanText(row.body, 240),
+    authorName: cleanText(row.author_name, 32) || "使用者",
+    reason: cleanText(row.reason, 240),
+    hiddenAt: row.hidden_at,
+  };
+}
+
 async function normalizePublicSummary(row) {
   const followers = await statements.getFollowersCount.get(row.id);
   return {
@@ -609,10 +800,11 @@ async function normalizePublicSummary(row) {
 
 async function normalizePublicProfile(row, session) {
   const snapshot = parseSnapshot(row.snapshot);
+  const hiddenTrades = await hiddenTradeSet();
   const recentTrades = Array.isArray(snapshot.history)
     ? await Promise.all(
         snapshot.history
-          .filter(isPublicTrade)
+          .filter((trade) => isPublicTrade(trade) && !hiddenTrades.has(publicTradeKey(row.id, cleanText(trade?.id, 64))))
           .slice(0, 6)
           .map((trade) => normalizePublicTrade(trade, row.id, session)),
       )
@@ -632,12 +824,15 @@ async function normalizePublicProfile(row, session) {
 
 async function buildFollowingFeed(session) {
   const rows = await statements.getFollowingFeedSources.all(session.user.id);
+  const hiddenTrades = await hiddenTradeSet();
   const groups = await Promise.all(
     rows.map(async (row) => {
       const snapshot = parseSnapshot(row.snapshot);
       if (!Array.isArray(snapshot.history)) return [];
 
-      return Promise.all(snapshot.history.filter(isPublicTrade).map(async (trade) => {
+      return Promise.all(snapshot.history
+        .filter((trade) => isPublicTrade(trade) && !hiddenTrades.has(publicTradeKey(row.id, cleanText(trade?.id, 64))))
+        .map(async (trade) => {
         const publicTrade = await normalizePublicTrade(trade, row.id, session);
         return {
           ...publicTrade,
@@ -727,14 +922,29 @@ function isPublicTrade(trade) {
   return Boolean(trade && typeof trade === "object" && trade.journal?.public === true);
 }
 
-async function findPublicTrade(ownerId, tradeId) {
+async function findPublicTrade(ownerId, tradeId, options = {}) {
   const row = await statements.getPublicProfile.get(ownerId);
   if (!row) return null;
   const snapshot = parseSnapshot(row.snapshot);
   const trade = Array.isArray(snapshot.history)
     ? snapshot.history.find((item) => cleanText(item?.id, 64) === tradeId && isPublicTrade(item))
     : null;
+  if (trade && !options.includeHidden && await isPublicTradeHidden(ownerId, tradeId)) return null;
   return trade ? { owner: row, trade } : null;
+}
+
+async function hiddenTradeSet() {
+  const rows = await statements.getHiddenTradeKeys.all();
+  return new Set(rows.map((row) => publicTradeKey(row.owner_id, row.trade_id)));
+}
+
+async function isPublicTradeHidden(ownerId, tradeId) {
+  const rows = await statements.getHiddenTradeKeys.all();
+  return rows.some((row) => String(row.owner_id) === String(ownerId) && String(row.trade_id) === String(tradeId));
+}
+
+function publicTradeKey(ownerId, tradeId) {
+  return `${ownerId}:${tradeId}`;
 }
 
 async function publicTradeLikesCount(ownerId, tradeId) {

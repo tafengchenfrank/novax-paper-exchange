@@ -678,10 +678,30 @@ function feedTradeRow(app, trade) {
           ${trade.likedByMe ? "取消讚" : "讚"} · ${amount(trade.likesCount || 0, 0)}
         </button>
         <button class="tiny-action" type="button" data-feed-profile="${escapeHtml(trade.ownerId)}">公開頁</button>
+        <button
+          class="tiny-action"
+          type="button"
+          data-feed-report-trade="${escapeHtml(trade.id)}"
+          data-report-owner="${escapeHtml(trade.ownerId)}"
+          ${!app.user ? "disabled" : ""}
+        >
+          檢舉
+        </button>
       </div>
 
       <div class="public-comments">
-        ${(trade.comments || []).map(publicCommentRow).join("") || `<div class="empty-state public-comment-empty">尚無留言。</div>`}
+        ${
+          (trade.comments || [])
+            .map((comment) =>
+              publicCommentRow(comment, {
+                ownerId: trade.ownerId,
+                tradeId: trade.id,
+                feed: true,
+                canReport: Boolean(app.user),
+              }),
+            )
+            .join("") || `<div class="empty-state public-comment-empty">尚無留言。</div>`
+        }
       </div>
       <div class="public-comment-form">
         <input
@@ -705,9 +725,11 @@ function feedTradeRow(app, trade) {
 
 function syncFeedInteractionState(app) {
   const disabled = !app.user || app.feedBusy;
-  app.els.feedList.querySelectorAll("[data-feed-like], [data-feed-post-comment]").forEach((button) => {
-    button.disabled = disabled;
-  });
+  app.els.feedList
+    .querySelectorAll("[data-feed-like], [data-feed-post-comment], [data-feed-report-trade], [data-feed-report-comment]")
+    .forEach((button) => {
+      button.disabled = disabled;
+    });
 }
 
 function alertToneLabel(tone) {
@@ -924,11 +946,15 @@ function publicProfileTradeSignature(app, profile) {
 function syncPublicProfileTradeState(app, profile) {
   const actionDisabled = app.publicProfileBusy || !app.user || profile.isSelf;
   const commentDisabled = app.publicProfileBusy || !app.user;
+  const reportDisabled = app.publicProfileBusy || !app.user;
   app.els.publicProfileTrades.querySelectorAll("[data-like-trade]").forEach((button) => {
     button.disabled = actionDisabled;
   });
   app.els.publicProfileTrades.querySelectorAll("[data-post-comment]").forEach((button) => {
     button.disabled = commentDisabled;
+  });
+  app.els.publicProfileTrades.querySelectorAll("[data-report-trade], [data-report-comment]").forEach((button) => {
+    button.disabled = reportDisabled;
   });
   app.els.publicProfileTrades.querySelectorAll("[data-comment-input]").forEach((input) => {
     input.disabled = !app.user;
@@ -977,9 +1003,27 @@ function publicTradeRow(app, profile, trade) {
         >
           ${trade.likedByMe ? "取消讚" : "讚"} · ${amount(trade.likesCount || 0, 0)}
         </button>
+        <button
+          class="tiny-action"
+          type="button"
+          data-report-trade="${escapeHtml(trade.id)}"
+          ${!app.user ? "disabled" : ""}
+        >
+          檢舉
+        </button>
       </div>
       <div class="public-comments">
-        ${(trade.comments || []).map(publicCommentRow).join("") || `<div class="empty-state public-comment-empty">尚無留言。</div>`}
+        ${
+          (trade.comments || [])
+            .map((comment) =>
+              publicCommentRow(comment, {
+                ownerId: profile.id,
+                tradeId: trade.id,
+                canReport: Boolean(app.user),
+              }),
+            )
+            .join("") || `<div class="empty-state public-comment-empty">尚無留言。</div>`
+        }
       </div>
       <div class="public-comment-form">
         <input
@@ -1002,10 +1046,22 @@ function publicTradeRow(app, profile, trade) {
   `;
 }
 
-function publicCommentRow(comment) {
+function publicCommentRow(comment, context = {}) {
+  const ownerId = context.ownerId || "";
+  const tradeId = context.tradeId || "";
+  const reportAttrs = context.feed
+    ? `data-feed-report-comment="${escapeHtml(comment.id)}" data-report-owner="${escapeHtml(ownerId)}" data-report-trade="${escapeHtml(tradeId)}"`
+    : `data-report-comment="${escapeHtml(comment.id)}" data-report-trade="${escapeHtml(tradeId)}"`;
+  const reportButton =
+    context.canReport && comment.id
+      ? `<button class="tiny-action comment-report" type="button" ${reportAttrs}>檢舉留言</button>`
+      : "";
   return `
     <div class="public-comment-row">
-      <strong>${escapeHtml(comment.authorName)}</strong>
+      <div class="public-comment-head">
+        <strong>${escapeHtml(comment.authorName)}</strong>
+        ${reportButton}
+      </div>
       <p>${escapeHtml(comment.body)}</p>
     </div>
   `;
@@ -1056,6 +1112,22 @@ function feedbackCategoryLabel(value) {
   }[value] || "其他";
 }
 
+function reportReasonLabel(value) {
+  return (
+    {
+      spam: "垃圾訊息",
+      abuse: "攻擊或騷擾",
+      misleading: "誤導性投資內容",
+      personal: "個資或敏感資訊",
+      other: "其他",
+    }[value] || "其他"
+  );
+}
+
+function moderationStatusLabel(value) {
+  return value === "actioned" ? "已處理" : "待處理";
+}
+
 function renderAuth(app) {
   const signedIn = Boolean(app.user);
   if (signedIn && app.authModalOpen) {
@@ -1090,6 +1162,15 @@ function renderFeedbackModals(app) {
   app.els.loadAdminFeedback.disabled = app.adminFeedbackBusy;
   app.els.loadAdminFeedback.textContent = app.adminFeedbackBusy ? "載入中..." : "載入回饋";
   renderAdminFeedback(app);
+
+  app.els.reportModal.classList.toggle("is-hidden", !app.reportModalOpen);
+  app.els.reportSubmit.disabled = app.reportBusy;
+  app.els.reportSubmit.textContent = app.reportBusy ? "送出中..." : "送出檢舉";
+
+  app.els.adminModerationModal.classList.toggle("is-hidden", !app.adminModerationOpen);
+  app.els.loadAdminModeration.disabled = app.adminModerationBusy;
+  app.els.loadAdminModeration.textContent = app.adminModerationBusy ? "載入中..." : "載入檢舉與隱藏內容";
+  renderAdminModeration(app);
 }
 
 function renderAdminFeedback(app) {
@@ -1123,6 +1204,138 @@ function renderAdminFeedback(app) {
       )
       .join("") ||
     (summary ? `<div class="empty-state admin-feedback-empty">目前還沒有回饋。</div>` : "");
+}
+
+function renderAdminModeration(app) {
+  const data = app.adminModerationData;
+  const summary = data?.summary;
+  app.els.adminModerationSummary.innerHTML = summary
+    ? `
+        <div><span>總檢舉</span><strong>${escapeHtml(summary.reportsCount)}</strong></div>
+        <div><span>待處理</span><strong>${escapeHtml(summary.openReportsCount)}</strong></div>
+        <div><span>隱藏交易</span><strong>${escapeHtml(summary.hiddenTradesCount)}</strong></div>
+        <div><span>隱藏留言</span><strong>${escapeHtml(summary.hiddenCommentsCount)}</strong></div>
+      `
+    : "";
+
+  if (!data) {
+    app.els.adminModerationList.innerHTML = "";
+    return;
+  }
+
+  app.els.adminModerationList.innerHTML = [
+    moderationSection(
+      "檢舉紀錄",
+      (data.reports || []).map((item) => moderationReportRow(app, item)).join(""),
+      "目前沒有檢舉。",
+    ),
+    moderationSection(
+      "已隱藏交易",
+      (data.hiddenTrades || []).map((item) => hiddenTradeRow(app, item)).join(""),
+      "目前沒有隱藏交易。",
+    ),
+    moderationSection(
+      "已隱藏留言",
+      (data.hiddenComments || []).map((item) => hiddenCommentRow(app, item)).join(""),
+      "目前沒有隱藏留言。",
+    ),
+  ].join("");
+}
+
+function moderationSection(title, body, emptyText) {
+  return `
+    <h3 class="moderation-heading">${escapeHtml(title)}</h3>
+    ${body || `<div class="empty-state admin-feedback-empty">${escapeHtml(emptyText)}</div>`}
+  `;
+}
+
+function moderationReportRow(app, item) {
+  const isComment = item.targetType === "comment";
+  const action = isComment ? "hide-comment" : "hide-trade";
+  const actionAttrs = isComment
+    ? `data-comment-id="${escapeHtml(item.commentId)}"`
+    : `data-owner-id="${escapeHtml(item.ownerId)}" data-trade-id="${escapeHtml(item.tradeId)}"`;
+  const actionButton =
+    item.status === "open"
+      ? `
+          <button
+            class="tiny-action"
+            type="button"
+            data-moderation-action="${action}"
+            ${actionAttrs}
+            ${app.adminModerationBusy ? "disabled" : ""}
+          >
+            ${isComment ? "隱藏留言" : "隱藏交易"}
+          </button>
+        `
+      : "";
+  const targetLabel = isComment ? `留言 #${item.commentId || "--"}` : `交易 ${item.tradeId || "--"}`;
+  return `
+    <article class="admin-feedback-item moderation-item ${item.status === "open" ? "" : "is-muted"}">
+      <div class="admin-feedback-head">
+        <span>${escapeHtml(reportReasonLabel(item.reason))} · ${dateTimeLabel(item.createdAt)} · ${escapeHtml(moderationStatusLabel(item.status))}</span>
+        <strong>${escapeHtml(targetLabel)}</strong>
+      </div>
+      <p>${escapeHtml(item.details || item.commentBody || "使用者沒有提供補充說明。")}</p>
+      <dl>
+        <div><dt>檢舉者</dt><dd>${escapeHtml(item.reporter?.name || "--")}</dd></div>
+        <div><dt>內容作者</dt><dd>${escapeHtml(item.commentAuthorName || item.ownerName || "--")}</dd></div>
+        <div><dt>擁有者</dt><dd>${escapeHtml(item.ownerName || "--")}</dd></div>
+      </dl>
+      <div class="moderation-actions">${actionButton}</div>
+    </article>
+  `;
+}
+
+function hiddenTradeRow(app, item) {
+  return `
+    <article class="admin-feedback-item moderation-item">
+      <div class="admin-feedback-head">
+        <span>${dateTimeLabel(item.hiddenAt)} · ${escapeHtml(item.reason || "未填原因")}</span>
+        <strong>${escapeHtml(item.ownerName || "使用者")} / ${escapeHtml(item.tradeId || "--")}</strong>
+      </div>
+      <div class="moderation-actions">
+        <button
+          class="tiny-action"
+          type="button"
+          data-moderation-action="unhide-trade"
+          data-owner-id="${escapeHtml(item.ownerId)}"
+          data-trade-id="${escapeHtml(item.tradeId)}"
+          ${app.adminModerationBusy ? "disabled" : ""}
+        >
+          解除隱藏
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function hiddenCommentRow(app, item) {
+  return `
+    <article class="admin-feedback-item moderation-item">
+      <div class="admin-feedback-head">
+        <span>${dateTimeLabel(item.hiddenAt)} · ${escapeHtml(item.reason || "未填原因")}</span>
+        <strong>${escapeHtml(item.authorName || "使用者")} 的留言</strong>
+      </div>
+      <p>${escapeHtml(item.body || "--")}</p>
+      <dl>
+        <div><dt>公開頁</dt><dd>${escapeHtml(item.ownerName || "--")}</dd></div>
+        <div><dt>交易</dt><dd>${escapeHtml(item.tradeId || "--")}</dd></div>
+        <div><dt>留言 ID</dt><dd>${escapeHtml(item.commentId || "--")}</dd></div>
+      </dl>
+      <div class="moderation-actions">
+        <button
+          class="tiny-action"
+          type="button"
+          data-moderation-action="unhide-comment"
+          data-comment-id="${escapeHtml(item.commentId)}"
+          ${app.adminModerationBusy ? "disabled" : ""}
+        >
+          解除隱藏
+        </button>
+      </div>
+    </article>
+  `;
 }
 
 function updateActiveControls(app) {

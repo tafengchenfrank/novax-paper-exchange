@@ -235,11 +235,17 @@ async function request(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(path, {
-    method: options.method || "GET",
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      method: options.method || "GET",
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (error) {
+    const reason = error?.message ? ` (${error.message})` : "";
+    throw new Error(`連不到 NovaX 伺服器，請確認網站後端已啟動、Render 網址可正常開啟，或稍後再試。${reason}`);
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {

@@ -5,6 +5,7 @@ import {
   followUser,
   getFollowing,
   getFollowingFeed,
+  getAdminDashboard,
   getAdminFeedback,
   getAdminModeration,
   getLeaderboard,
@@ -128,6 +129,10 @@ const app = {
   adminFeedbackBusy: false,
   adminFeedbackRows: [],
   adminFeedbackSummary: null,
+  adminDashboardOpen: false,
+  adminDashboardBusy: false,
+  adminDashboardData: null,
+  adminUserSearch: "",
   reportModalOpen: false,
   reportBusy: false,
   reportTarget: null,
@@ -466,6 +471,7 @@ function bindEvents(app) {
     });
   });
   app.els.openProfile.addEventListener("click", () => openProfileModal(app));
+  app.els.openAdminDashboard.addEventListener("click", () => openAdminDashboardModal(app));
   app.els.closeProfile.addEventListener("click", () => closeProfileModal(app));
   app.els.profileModal.addEventListener("click", (event) => {
     if (event.target?.dataset?.profileClose !== undefined) {
@@ -575,6 +581,17 @@ function bindEvents(app) {
       loadAdminFeedback(app);
     }
   });
+  app.els.closeAdminDashboard.addEventListener("click", () => closeAdminDashboardModal(app));
+  app.els.adminDashboardModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.adminDashboardClose !== undefined) {
+      closeAdminDashboardModal(app);
+    }
+  });
+  app.els.refreshAdminDashboard.addEventListener("click", () => loadAdminDashboard(app));
+  app.els.adminUserSearch.addEventListener("input", () => {
+    app.adminUserSearch = app.els.adminUserSearch.value;
+    renderAll(app);
+  });
   app.els.closeReport.addEventListener("click", () => closeReportModal(app));
   app.els.reportModal.addEventListener("click", (event) => {
     if (event.target?.dataset?.reportClose !== undefined) {
@@ -622,6 +639,8 @@ function bindEvents(app) {
       closeFeedbackModal(app);
     } else if (app.adminFeedbackOpen) {
       closeAdminFeedbackModal(app);
+    } else if (app.adminDashboardOpen) {
+      closeAdminDashboardModal(app);
     } else if (app.reportModalOpen) {
       closeReportModal(app);
     } else if (app.adminModerationOpen) {
@@ -990,6 +1009,14 @@ async function logout(app) {
   app.publicProfile = null;
   app.selectedPublicProfileId = null;
   app.publicCommentDrafts = {};
+  app.adminFeedbackOpen = false;
+  app.adminFeedbackRows = [];
+  app.adminFeedbackSummary = null;
+  app.adminDashboardOpen = false;
+  app.adminDashboardData = null;
+  app.adminUserSearch = "";
+  app.adminModerationOpen = false;
+  app.adminModerationData = null;
   app.feedRows = [];
   app.feedBusy = false;
   app.feedMessage = "";
@@ -1075,7 +1102,11 @@ function openAdminFeedbackModal(app) {
   app.els.adminFeedbackToken.value = sessionStorage.getItem("novax-admin-token") || "";
   setAdminFeedbackMessage(app, "");
   renderAll(app);
-  app.els.adminFeedbackToken.focus();
+  if (isAdminUser(app) && !app.els.adminFeedbackToken.value) {
+    loadAdminFeedback(app);
+  } else {
+    app.els.adminFeedbackToken.focus();
+  }
 }
 
 function closeAdminFeedbackModal(app) {
@@ -1088,8 +1119,8 @@ async function loadAdminFeedback(app) {
   if (app.adminFeedbackBusy) return;
 
   const token = app.els.adminFeedbackToken.value.trim();
-  if (!token) {
-    setAdminFeedbackMessage(app, "請輸入 Render 環境變數 NOVAX_ADMIN_TOKEN。", "error");
+  if (!token && !isAdminUser(app)) {
+    setAdminFeedbackMessage(app, "請輸入 Admin Token，或使用管理員帳號登入。", "error");
     return;
   }
 
@@ -1099,7 +1130,7 @@ async function loadAdminFeedback(app) {
 
   try {
     const data = await getAdminFeedback(token);
-    sessionStorage.setItem("novax-admin-token", token);
+    if (token) sessionStorage.setItem("novax-admin-token", token);
     app.adminFeedbackSummary = data.summary;
     app.adminFeedbackRows = data.rows || [];
     setAdminFeedbackMessage(app, `已載入 ${app.adminFeedbackRows.length} 則最新回饋。`, "ok");
@@ -1107,6 +1138,47 @@ async function loadAdminFeedback(app) {
     setAdminFeedbackMessage(app, error.message, "error");
   } finally {
     app.adminFeedbackBusy = false;
+    renderAll(app);
+  }
+}
+
+function openAdminDashboardModal(app) {
+  if (!isAdminUser(app)) {
+    setAuthMessage(app, "這個帳號沒有後臺權限。", "error");
+    renderAll(app);
+    return;
+  }
+
+  app.adminDashboardOpen = true;
+  setAdminDashboardMessage(app, "");
+  renderAll(app);
+  if (!app.adminDashboardData) {
+    loadAdminDashboard(app);
+  } else {
+    app.els.adminUserSearch.focus();
+  }
+}
+
+function closeAdminDashboardModal(app) {
+  app.adminDashboardOpen = false;
+  setAdminDashboardMessage(app, "");
+  renderAll(app);
+}
+
+async function loadAdminDashboard(app) {
+  if (app.adminDashboardBusy) return;
+
+  app.adminDashboardBusy = true;
+  setAdminDashboardMessage(app, "載入後臺資料中...");
+  renderAll(app);
+
+  try {
+    app.adminDashboardData = await getAdminDashboard();
+    setAdminDashboardMessage(app, `已載入 ${app.adminDashboardData.users?.length || 0} 個帳號。`, "ok");
+  } catch (error) {
+    setAdminDashboardMessage(app, error.message, "error");
+  } finally {
+    app.adminDashboardBusy = false;
     renderAll(app);
   }
 }
@@ -1164,7 +1236,11 @@ function openAdminModerationModal(app) {
   app.els.adminModerationToken.value = sessionStorage.getItem("novax-admin-token") || "";
   setAdminModerationMessage(app, "");
   renderAll(app);
-  app.els.adminModerationToken.focus();
+  if (isAdminUser(app) && !app.els.adminModerationToken.value) {
+    loadAdminModeration(app);
+  } else {
+    app.els.adminModerationToken.focus();
+  }
 }
 
 function closeAdminModerationModal(app) {
@@ -1177,8 +1253,8 @@ async function loadAdminModeration(app) {
   if (app.adminModerationBusy) return;
 
   const token = app.els.adminModerationToken.value.trim();
-  if (!token) {
-    setAdminModerationMessage(app, "請輸入 Render 環境變數 NOVAX_ADMIN_TOKEN。", "error");
+  if (!token && !isAdminUser(app)) {
+    setAdminModerationMessage(app, "請輸入 Admin Token，或使用管理員帳號登入。", "error");
     return;
   }
 
@@ -1188,7 +1264,7 @@ async function loadAdminModeration(app) {
 
   try {
     app.adminModerationData = await getAdminModeration(token);
-    sessionStorage.setItem("novax-admin-token", token);
+    if (token) sessionStorage.setItem("novax-admin-token", token);
     setAdminModerationMessage(app, "內容管理資料已更新。", "ok");
   } catch (error) {
     setAdminModerationMessage(app, error.message, "error");
@@ -1200,7 +1276,7 @@ async function loadAdminModeration(app) {
 
 async function handleModerationAction(app, action, dataset) {
   const token = app.els.adminModerationToken.value.trim();
-  if (!token || app.adminModerationBusy) return;
+  if ((!token && !isAdminUser(app)) || app.adminModerationBusy) return;
 
   const reason =
     action.startsWith("hide")
@@ -1630,6 +1706,7 @@ function updateMobileNavFromScroll(app) {
     app.legalModalOpen ||
     app.feedbackModalOpen ||
     app.adminFeedbackOpen ||
+    app.adminDashboardOpen ||
     app.reportModalOpen ||
     app.adminModerationOpen
   ) {
@@ -1735,6 +1812,11 @@ function setAdminFeedbackMessage(app, message, tone = "") {
   app.els.adminFeedbackMessage.className = `auth-message ${tone}`;
 }
 
+function setAdminDashboardMessage(app, message, tone = "") {
+  app.els.adminDashboardMessage.textContent = message;
+  app.els.adminDashboardMessage.className = `auth-message ${tone}`;
+}
+
 function setReportMessage(app, message, tone = "") {
   app.els.reportMessage.textContent = message;
   app.els.reportMessage.className = `auth-message ${tone}`;
@@ -1743,4 +1825,8 @@ function setReportMessage(app, message, tone = "") {
 function setAdminModerationMessage(app, message, tone = "") {
   app.els.adminModerationMessage.textContent = message;
   app.els.adminModerationMessage.className = `auth-message ${tone}`;
+}
+
+function isAdminUser(app) {
+  return app.user?.role === "admin";
 }

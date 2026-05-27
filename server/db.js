@@ -494,6 +494,25 @@ const statementSql = {
       (SELECT COUNT(*) FROM feedback) AS feedback_count,
       (SELECT COUNT(*) FROM feedback WHERE status = 'new') AS new_feedback_count
   `,
+  getAdminUsers: `
+    SELECT
+      users.id,
+      users.name,
+      users.email,
+      users.created_at,
+      accounts.equity,
+      accounts.roi,
+      accounts.trades_count,
+      accounts.updated_at AS account_updated_at,
+      (SELECT COUNT(*) FROM follows WHERE follows.followed_id = users.id) AS followers_count,
+      (SELECT COUNT(*) FROM follows WHERE follows.follower_id = users.id) AS following_count,
+      (SELECT COUNT(*) FROM feedback WHERE feedback.user_id = users.id) AS feedback_count,
+      (SELECT COUNT(*) FROM content_reports WHERE content_reports.reporter_id = users.id) AS reports_made_count
+    FROM users
+    LEFT JOIN accounts ON accounts.user_id = users.id
+    ORDER BY users.created_at DESC, users.id DESC
+    LIMIT 100
+  `,
   getHiddenTradeKeys: "SELECT owner_id, trade_id FROM hidden_public_trades",
   getHiddenComment: "SELECT comment_id FROM hidden_trade_comments WHERE comment_id = ?",
   hideTrade: `

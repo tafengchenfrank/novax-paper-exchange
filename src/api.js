@@ -140,8 +140,15 @@ export async function submitFeedback({ category, body, contact, pagePath }) {
 
 export async function getAdminFeedback(adminToken) {
   return request("/api/admin/feedback", {
-    headers: { "X-Admin-Token": adminToken },
-    auth: false,
+    headers: adminToken ? { "X-Admin-Token": adminToken } : {},
+    auth: adminToken ? false : true,
+  });
+}
+
+export async function getAdminDashboard(adminToken = "") {
+  return request("/api/admin/dashboard", {
+    headers: adminToken ? { "X-Admin-Token": adminToken } : {},
+    auth: adminToken ? false : true,
   });
 }
 
@@ -154,44 +161,44 @@ export async function reportContent({ targetType, ownerId, tradeId, commentId, r
 
 export async function getAdminModeration(adminToken) {
   return request("/api/admin/moderation", {
-    headers: { "X-Admin-Token": adminToken },
-    auth: false,
+    headers: adminToken ? { "X-Admin-Token": adminToken } : {},
+    auth: adminToken ? false : true,
   });
 }
 
 export async function hideModerationTrade(adminToken, { ownerId, tradeId, reason }) {
   return request("/api/admin/moderation/trades/hide", {
     method: "POST",
-    headers: { "X-Admin-Token": adminToken },
+    headers: adminToken ? { "X-Admin-Token": adminToken } : {},
     body: { ownerId, tradeId, reason },
-    auth: false,
+    auth: adminToken ? false : true,
   });
 }
 
 export async function unhideModerationTrade(adminToken, { ownerId, tradeId }) {
   return request("/api/admin/moderation/trades/unhide", {
     method: "POST",
-    headers: { "X-Admin-Token": adminToken },
+    headers: adminToken ? { "X-Admin-Token": adminToken } : {},
     body: { ownerId, tradeId },
-    auth: false,
+    auth: adminToken ? false : true,
   });
 }
 
 export async function hideModerationComment(adminToken, { commentId, reason }) {
   return request("/api/admin/moderation/comments/hide", {
     method: "POST",
-    headers: { "X-Admin-Token": adminToken },
+    headers: adminToken ? { "X-Admin-Token": adminToken } : {},
     body: { commentId, reason },
-    auth: false,
+    auth: adminToken ? false : true,
   });
 }
 
 export async function unhideModerationComment(adminToken, { commentId }) {
   return request("/api/admin/moderation/comments/unhide", {
     method: "POST",
-    headers: { "X-Admin-Token": adminToken },
+    headers: adminToken ? { "X-Admin-Token": adminToken } : {},
     body: { commentId },
-    auth: false,
+    auth: adminToken ? false : true,
   });
 }
 

@@ -51,12 +51,13 @@ Plan: Free
 ```text
 DATABASE_URL=你的 Neon connection string
 NOVAX_PUBLIC_ORIGIN=https://你的-render網址.onrender.com
+NOVAX_ADMIN_EMAILS=你的登入信箱@example.com
 NOVAX_ADMIN_TOKEN=一串只有你知道的長密碼
 NOVAX_PASSWORD_RESET_MINUTES=30
 ```
 
 `NODE_ENV`、`HOST`、`NOVAX_SESSION_DAYS`、`NOVAX_MAX_JSON_BYTES` 已經寫在 `render.yaml`。
-`NOVAX_ADMIN_TOKEN` 用於網站底部的「管理回饋」與「內容管理」入口，不要放進 GitHub。
+`NOVAX_ADMIN_EMAILS` 是管理員帳號白名單，填你會拿來註冊或登入 NovaX 的 email；多個管理員可用逗號分隔。`NOVAX_ADMIN_TOKEN` 是備用管理金鑰，不要放進 GitHub。
 
 如果要讓「忘記密碼」真的寄出重設連結，另外設定 Resend：
 
@@ -88,7 +89,7 @@ https://你的-render網址.onrender.com/api/health
 }
 ```
 
-也可以登入網站後送出一則 Beta 回饋，或在公開交易/留言按「檢舉」確認流程可用；管理者再用 `NOVAX_ADMIN_TOKEN` 開啟「內容管理」查看檢舉與隱藏內容。
+也可以登入網站後送出一則 Beta 回饋，或在公開交易/留言按「檢舉」確認流程可用；管理員 email 登入後會在帳號區看到「後臺」，可以查看所有帳號、回饋與檢舉內容。
 
 ## 6. 免費方案限制
 

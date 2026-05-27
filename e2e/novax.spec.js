@@ -103,6 +103,7 @@ test("registers, edits profile, and logs in with the updated password", async ({
   });
 
   await expect(page.locator("#authUserName")).toHaveText("E2E Pilot");
+  await expect(page.locator("#openAdminDashboard")).toBeHidden();
   await expect(page.locator("#onboardingProgress")).toHaveText("1/5 完成");
 
   await page.locator("#openProfile").click();
@@ -149,6 +150,39 @@ test("registers, edits profile, and logs in with the updated password", async ({
     password: "password789",
   });
   await expect(page.locator("#authUserName")).toHaveText("E2E Captain");
+});
+
+test("opens the back office for admin accounts", async ({ page }) => {
+  await gotoCleanApp(page);
+  await registerViaUi(page, {
+    name: "E2E Admin",
+    email: "e2e-admin@novax.local",
+    password: "password123",
+  });
+
+  await expect(page.locator("#authUserName")).toHaveText("E2E Admin · 管理員");
+  await expect(page.locator("#openAdminDashboard")).toBeVisible();
+
+  await page.locator("#openAdminDashboard").click();
+  await expect(page.locator("#adminDashboardModal")).toBeVisible();
+  await expect(page.locator("#adminDashboardSummary")).toContainText("註冊帳號");
+  await expect(page.locator("#adminDashboardSummary")).toContainText("待處理檢舉");
+  await expect(page.locator("#adminUserList")).toContainText("e2e-admin@novax.local");
+
+  await page.locator("#adminUserSearch").fill("e2e-admin");
+  await expect(page.locator("#adminUserList")).toContainText("E2E Admin");
+  await expect(page.locator("#adminUserList")).toContainText("管理員");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#adminDashboardModal")).toBeHidden();
+
+  await page.locator("[data-admin-feedback-open]").first().click();
+  await expect(page.locator("#adminFeedbackModal")).toBeVisible();
+  await expect(page.locator("#adminFeedbackMessage")).toContainText("已載入");
+  await page.locator("#closeAdminFeedback").click();
+
+  await page.locator("[data-admin-moderation-open]").first().click();
+  await expect(page.locator("#adminModerationModal")).toBeVisible();
+  await expect(page.locator("#adminModerationMessage")).toHaveText("內容管理資料已更新。");
 });
 
 test("opens public profiles and follows another trader", async ({ page }) => {

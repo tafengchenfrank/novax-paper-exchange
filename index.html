@@ -62,6 +62,7 @@
               <strong id="authUserName">--</strong>
             </div>
             <div class="account-actions">
+              <button id="openAdminDashboard" class="tiny-action is-hidden" type="button">後臺</button>
               <button id="openProfile" class="tiny-action" type="button">資料</button>
               <button id="syncAccount" class="tiny-action" type="button" title="儲存模擬進度到雲端">儲存</button>
               <button id="logoutAccount" class="tiny-action" type="button">登出</button>
@@ -796,13 +797,40 @@
           </div>
 
           <label class="auth-field">
-            <span>Admin Token</span>
+            <span>Admin Token（管理員帳號可留空）</span>
             <input id="adminFeedbackToken" type="password" autocomplete="off" />
           </label>
           <button id="loadAdminFeedback" class="auth-submit" type="button">載入回饋</button>
           <p id="adminFeedbackMessage" class="auth-message" role="status"></p>
           <div id="adminFeedbackSummary" class="admin-summary"></div>
           <div id="adminFeedbackList" class="admin-feedback-list"></div>
+        </section>
+      </div>
+
+      <div
+        id="adminDashboardModal"
+        class="auth-modal is-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adminDashboardTitle"
+      >
+        <button class="auth-backdrop" type="button" data-admin-dashboard-close aria-label="關閉後臺管理視窗"></button>
+        <section class="auth-card admin-feedback-card">
+          <div class="auth-head">
+            <div>
+              <span>Back Office</span>
+              <strong id="adminDashboardTitle">後臺管理</strong>
+            </div>
+            <button id="closeAdminDashboard" class="icon-button" type="button" aria-label="關閉後臺管理視窗">X</button>
+          </div>
+
+          <div id="adminDashboardSummary" class="admin-summary"></div>
+          <div class="admin-toolbar">
+            <input id="adminUserSearch" type="search" placeholder="搜尋名稱或 email" autocomplete="off" />
+            <button id="refreshAdminDashboard" class="tiny-action" type="button">刷新</button>
+          </div>
+          <p id="adminDashboardMessage" class="auth-message" role="status"></p>
+          <div id="adminUserList" class="admin-feedback-list"></div>
         </section>
       </div>
 
@@ -854,7 +882,7 @@
           </div>
 
           <label class="auth-field">
-            <span>Admin Token</span>
+            <span>Admin Token（管理員帳號可留空）</span>
             <input id="adminModerationToken" type="password" autocomplete="off" />
           </label>
           <button id="loadAdminModeration" class="auth-submit" type="button">載入檢舉與隱藏內容</button>

@@ -16,6 +16,10 @@ export default defineConfig({
     url: "http://127.0.0.1:8787/api/health",
     reuseExistingServer: true,
     timeout: 15000,
+    env: {
+      ...process.env,
+      NOVAX_ADMIN_EMAILS: "e2e-admin@novax.local",
+    },
   },
   projects: [
     {

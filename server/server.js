@@ -90,7 +90,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/feedback") {
-    if (!isAdminRequest(request)) {
+    if (!(await isAdminRequest(request))) {
       sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
       return;
     }
@@ -100,6 +100,25 @@ async function handleApi(request, response, url) {
     sendJson(response, 200, {
       summary: normalizeAdminSummary(summary),
       rows,
+    });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/dashboard") {
+    if (!(await isAdminRequest(request))) {
+      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+      return;
+    }
+
+    const adminSummary = normalizeAdminSummary(await statements.getAdminSummary.get());
+    const moderationSummary = normalizeModerationSummary(await statements.getModerationSummary.get());
+    sendJson(response, 200, {
+      summary: {
+        ...adminSummary,
+        ...moderationSummary,
+        adminAccountsCount: config.adminEmails.length,
+      },
+      users: (await statements.getAdminUsers.all()).map(normalizeAdminAccount),
     });
     return;
   }
@@ -151,7 +170,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/moderation") {
-    if (!isAdminRequest(request)) {
+    if (!(await isAdminRequest(request))) {
       sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
       return;
     }
@@ -166,7 +185,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/trades/hide") {
-    if (!isAdminRequest(request)) {
+    if (!(await isAdminRequest(request))) {
       sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
       return;
     }
@@ -187,7 +206,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/trades/unhide") {
-    if (!isAdminRequest(request)) {
+    if (!(await isAdminRequest(request))) {
       sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
       return;
     }
@@ -199,7 +218,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/comments/hide") {
-    if (!isAdminRequest(request)) {
+    if (!(await isAdminRequest(request))) {
       sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
       return;
     }
@@ -219,7 +238,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/comments/unhide") {
-    if (!isAdminRequest(request)) {
+    if (!(await isAdminRequest(request))) {
       sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
       return;
     }
@@ -784,10 +803,12 @@ function cleanReportReason(value) {
   return ["spam", "abuse", "misleading", "personal", "other"].includes(reason) ? reason : "other";
 }
 
-function isAdminRequest(request) {
-  if (!config.adminToken) return false;
+async function isAdminRequest(request) {
   const token = cleanText(request.headers["x-admin-token"], 200);
-  return token && token === config.adminToken;
+  if (config.adminToken && token && token === config.adminToken) return true;
+
+  const session = await requireUser(request);
+  return session?.user.role === "admin";
 }
 
 function normalizeUser(user) {
@@ -795,8 +816,14 @@ function normalizeUser(user) {
     id: user.id,
     name: user.name,
     email: user.email,
+    role: userRole(user),
     createdAt: user.created_at,
   };
+}
+
+function userRole(user) {
+  const email = String(user?.email || "").toLowerCase();
+  return user?.role === "admin" || config.adminEmails.includes(email) ? "admin" : "user";
 }
 
 function normalizeFeedback(row) {
@@ -825,6 +852,24 @@ function normalizeAdminSummary(row) {
     syncedAccountsCount: Math.max(0, Math.round(finiteNumber(row?.synced_accounts_count, 0))),
     feedbackCount: Math.max(0, Math.round(finiteNumber(row?.feedback_count, 0))),
     newFeedbackCount: Math.max(0, Math.round(finiteNumber(row?.new_feedback_count, 0))),
+  };
+}
+
+function normalizeAdminAccount(row) {
+  return {
+    id: row.id,
+    name: cleanText(row.name, 32) || "使用者",
+    email: cleanEmail(row.email),
+    role: userRole(row),
+    createdAt: row.created_at,
+    equity: nullableNumber(row.equity),
+    roi: nullableNumber(row.roi),
+    tradesCount: Math.max(0, Math.round(finiteNumber(row.trades_count, 0))),
+    accountUpdatedAt: row.account_updated_at || null,
+    followersCount: Math.max(0, Math.round(finiteNumber(row.followers_count, 0))),
+    followingCount: Math.max(0, Math.round(finiteNumber(row.following_count, 0))),
+    feedbackCount: Math.max(0, Math.round(finiteNumber(row.feedback_count, 0))),
+    reportsMadeCount: Math.max(0, Math.round(finiteNumber(row.reports_made_count, 0))),
   };
 }
 

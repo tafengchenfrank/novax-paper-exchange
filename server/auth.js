@@ -44,7 +44,13 @@ export async function requireUser(request) {
       id: row.id,
       name: row.name,
       email: row.email,
+      role: userRole(row),
       createdAt: row.created_at,
     },
   };
+}
+
+function userRole(row) {
+  const email = String(row.email || "").toLowerCase();
+  return row.role === "admin" || config.adminEmails.includes(email) ? "admin" : "user";
 }

@@ -21,6 +21,7 @@ const sessionDays = numberInRange(process.env.NOVAX_SESSION_DAYS, 1, 90, 14);
 const maxJsonBytes = numberInRange(process.env.NOVAX_MAX_JSON_BYTES, 1000, 5_000_000, 1_000_000);
 const corsOrigins = splitCsv(process.env.NOVAX_CORS_ORIGINS || publicOrigin);
 const adminToken = cleanText(process.env.NOVAX_ADMIN_TOKEN || "");
+const adminEmails = splitCsv(process.env.NOVAX_ADMIN_EMAILS || "").map((email) => email.toLowerCase());
 const resendApiKey = cleanText(process.env.RESEND_API_KEY || "");
 const emailFrom = cleanText(process.env.NOVAX_EMAIL_FROM || "");
 const supportEmail = cleanText(process.env.NOVAX_SUPPORT_EMAIL || emailFrom);
@@ -43,6 +44,7 @@ export const config = {
   maxJsonBytes,
   corsOrigins,
   adminToken,
+  adminEmails,
   passwordResetMinutes,
   email: {
     enabled: emailEnabled,
@@ -61,7 +63,8 @@ export function publicConfigSummary() {
     storage: config.storage,
     corsOrigins: config.corsOrigins.length,
     sessionDays: config.sessionDays,
-    adminEnabled: Boolean(config.adminToken),
+    adminEnabled: Boolean(config.adminToken || config.adminEmails.length),
+    adminAccounts: config.adminEmails.length,
     emailEnabled: config.email.enabled,
   };
 }

@@ -1130,6 +1130,7 @@ function moderationStatusLabel(value) {
 
 function renderAuth(app) {
   const signedIn = Boolean(app.user);
+  const isAdmin = app.user?.role === "admin";
   if (signedIn && app.authModalOpen) {
     app.authModalOpen = false;
   }
@@ -1139,9 +1140,17 @@ function renderAuth(app) {
   if (!signedIn && app.profileModalOpen) {
     app.profileModalOpen = false;
   }
+  if (!isAdmin) {
+    app.adminFeedbackOpen = false;
+    app.adminDashboardOpen = false;
+    app.adminModerationOpen = false;
+  }
 
   app.els.authGuest.classList.toggle("is-hidden", signedIn);
   app.els.authSignedIn.classList.toggle("is-hidden", !signedIn);
+  app.els.openAdminDashboard.classList.toggle("is-hidden", !isAdmin);
+  app.els.adminFeedbackOpenButtons.forEach((button) => button.classList.toggle("is-hidden", !isAdmin));
+  app.els.adminModerationOpenButtons.forEach((button) => button.classList.toggle("is-hidden", !isAdmin));
   app.els.authModal.classList.toggle("is-hidden", !app.authModalOpen || signedIn);
   app.els.forgotPasswordModal.classList.toggle("is-hidden", !app.forgotPasswordOpen || signedIn);
   app.els.resetPasswordModal.classList.toggle("is-hidden", !app.resetPasswordOpen);
@@ -1163,7 +1172,7 @@ function renderAuth(app) {
   app.els.profileSubmit.textContent = app.profileBusy ? "儲存中..." : "儲存資料";
 
   if (signedIn) {
-    app.els.authUserName.textContent = app.user.name;
+    app.els.authUserName.textContent = isAdmin ? `${app.user.name} · 管理員` : app.user.name;
   }
 }
 
@@ -1176,6 +1185,12 @@ function renderFeedbackModals(app) {
   app.els.loadAdminFeedback.disabled = app.adminFeedbackBusy;
   app.els.loadAdminFeedback.textContent = app.adminFeedbackBusy ? "載入中..." : "載入回饋";
   renderAdminFeedback(app);
+
+  app.els.adminDashboardModal.classList.toggle("is-hidden", !app.adminDashboardOpen);
+  app.els.refreshAdminDashboard.disabled = app.adminDashboardBusy;
+  app.els.refreshAdminDashboard.textContent = app.adminDashboardBusy ? "載入中..." : "刷新";
+  app.els.adminUserSearch.value = app.adminUserSearch || "";
+  renderAdminDashboard(app);
 
   app.els.reportModal.classList.toggle("is-hidden", !app.reportModalOpen);
   app.els.reportSubmit.disabled = app.reportBusy;
@@ -1218,6 +1233,60 @@ function renderAdminFeedback(app) {
       )
       .join("") ||
     (summary ? `<div class="empty-state admin-feedback-empty">目前還沒有回饋。</div>` : "");
+}
+
+function renderAdminDashboard(app) {
+  const data = app.adminDashboardData;
+  const summary = data?.summary;
+  app.els.adminDashboardSummary.innerHTML = summary
+    ? `
+        <div><span>註冊帳號</span><strong>${escapeHtml(summary.usersCount)}</strong></div>
+        <div><span>已同步帳號</span><strong>${escapeHtml(summary.syncedAccountsCount)}</strong></div>
+        <div><span>管理員白名單</span><strong>${escapeHtml(summary.adminAccountsCount)}</strong></div>
+        <div><span>待處理檢舉</span><strong>${escapeHtml(summary.openReportsCount)}</strong></div>
+      `
+    : "";
+
+  if (!data) {
+    app.els.adminUserList.innerHTML = "";
+    return;
+  }
+
+  const users = filteredAdminUsers(app);
+  app.els.adminUserList.innerHTML = users.length
+    ? users.map(adminUserRow).join("")
+    : `<div class="empty-state admin-feedback-empty">沒有符合條件的帳號。</div>`;
+}
+
+function filteredAdminUsers(app) {
+  const query = String(app.adminUserSearch || "").trim().toLowerCase();
+  const users = app.adminDashboardData?.users || [];
+  if (!query) return users;
+
+  return users.filter((user) =>
+    `${user.name || ""} ${user.email || ""}`.toLowerCase().includes(query),
+  );
+}
+
+function adminUserRow(user) {
+  const isAdmin = user.role === "admin";
+  return `
+    <article class="admin-feedback-item admin-user-item ${isAdmin ? "is-admin" : ""}">
+      <div class="admin-feedback-head">
+        <span>${escapeHtml(isAdmin ? "管理員" : "一般帳號")} · ${dateTimeLabel(user.createdAt)}</span>
+        <strong>${escapeHtml(user.name || "使用者")}</strong>
+      </div>
+      <p>${escapeHtml(user.email || "--")}</p>
+      <dl>
+        <div><dt>總權益</dt><dd>${formatNullableCurrency(user.equity)}</dd></div>
+        <div><dt>ROI</dt><dd class="${toneClass(user.roi)}">${formatNullablePercent(user.roi)}</dd></div>
+        <div><dt>交易</dt><dd>${amount(user.tradesCount || 0, 0)}</dd></div>
+        <div><dt>最後同步</dt><dd>${dateTimeLabel(user.accountUpdatedAt)}</dd></div>
+        <div><dt>追蹤者 / 中</dt><dd>${amount(user.followersCount || 0, 0)} / ${amount(user.followingCount || 0, 0)}</dd></div>
+        <div><dt>回饋 / 檢舉</dt><dd>${amount(user.feedbackCount || 0, 0)} / ${amount(user.reportsMadeCount || 0, 0)}</dd></div>
+      </dl>
+    </article>
+  `;
 }
 
 function renderAdminModeration(app) {

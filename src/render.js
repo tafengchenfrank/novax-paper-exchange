@@ -1170,6 +1170,9 @@ function renderAuth(app) {
   app.els.resetPasswordSubmit.textContent = app.resetPasswordBusy ? "更新中..." : "更新密碼";
   app.els.profileSubmit.disabled = app.profileBusy;
   app.els.profileSubmit.textContent = app.profileBusy ? "儲存中..." : "儲存資料";
+  app.els.adminBootstrapBlock.classList.toggle("is-hidden", !signedIn || isAdmin);
+  app.els.adminBootstrapSubmit.disabled = app.adminBootstrapBusy;
+  app.els.adminBootstrapSubmit.textContent = app.adminBootstrapBusy ? "啟用中..." : "啟用管理員權限";
 
   if (signedIn) {
     app.els.authUserName.textContent = isAdmin ? `${app.user.name} · 管理員` : app.user.name;
@@ -1242,7 +1245,7 @@ function renderAdminDashboard(app) {
     ? `
         <div><span>註冊帳號</span><strong>${escapeHtml(summary.usersCount)}</strong></div>
         <div><span>已同步帳號</span><strong>${escapeHtml(summary.syncedAccountsCount)}</strong></div>
-        <div><span>管理員白名單</span><strong>${escapeHtml(summary.adminAccountsCount)}</strong></div>
+        <div><span>管理員帳號</span><strong>${escapeHtml(summary.adminAccountsCount)}</strong></div>
         <div><span>待處理檢舉</span><strong>${escapeHtml(summary.openReportsCount)}</strong></div>
       `
     : "";

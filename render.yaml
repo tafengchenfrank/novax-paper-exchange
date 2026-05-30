@@ -22,8 +22,6 @@ services:
         value: "1000000"
       - key: NOVAX_PASSWORD_RESET_MINUTES
         value: "30"
-      - key: NOVAX_ADMIN_EMAILS
-        sync: false
       - key: NOVAX_ADMIN_TOKEN
         sync: false
       - key: RESEND_API_KEY

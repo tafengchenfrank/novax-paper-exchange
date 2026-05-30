@@ -508,6 +508,12 @@ button {
   color: var(--soft);
 }
 
+.admin-bootstrap {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
 .auth-link-button {
   width: 100%;
   margin-top: 8px;

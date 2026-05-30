@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/novax-logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/novax-icon-192.png" />
-    <link rel="stylesheet" href="styles.css" />
-    <script type="module" src="app.js"></script>
+    <link rel="stylesheet" href="styles.css?v=31" />
+    <script type="module" src="app.js?v=31"></script>
   </head>
   <body>
     <div class="app-frame">
@@ -606,6 +606,13 @@
             <input id="profileNewPassword" type="password" autocomplete="new-password" />
           </label>
           <button id="profileSubmit" class="auth-submit" type="button">儲存資料</button>
+          <div id="adminBootstrapBlock" class="admin-bootstrap is-hidden">
+            <label class="auth-field">
+              <span>Admin Token</span>
+              <input id="adminBootstrapToken" type="password" autocomplete="off" />
+            </label>
+            <button id="adminBootstrapSubmit" class="auth-secondary" type="button">啟用管理員權限</button>
+          </div>
           <p id="profileMessage" class="auth-message" role="status"></p>
         </section>
       </div>

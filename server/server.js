@@ -1,6 +1,6 @@
 import { createReadStream, existsSync } from "node:fs";
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import { createSession, hashPassword, hashToken, requireUser, verifyPassword } from "./auth.js";
 import { config, publicConfigSummary } from "./config.js";
@@ -16,6 +16,22 @@ const mimeTypes = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
 };
+
+const minute = 60 * 1000;
+const rateLimitPresets = {
+  loginIp: { limit: 25, windowMs: 15 * minute },
+  loginEmail: { limit: 8, windowMs: 15 * minute },
+  registerIp: { limit: 10, windowMs: 60 * minute },
+  registerEmail: { limit: 3, windowMs: 60 * minute },
+  passwordResetIp: { limit: 8, windowMs: 60 * minute },
+  passwordResetEmail: { limit: 4, windowMs: 60 * minute },
+  resetPasswordIp: { limit: 15, windowMs: 60 * minute },
+  resetPasswordToken: { limit: 8, windowMs: 60 * minute },
+  adminBootstrapIp: { limit: 12, windowMs: 15 * minute },
+  adminBootstrapUser: { limit: 6, windowMs: 15 * minute },
+  adminTokenIp: { limit: 20, windowMs: 15 * minute },
+};
+const rateLimitBuckets = new Map();
 
 const server = createServer(async (request, response) => {
   try {
@@ -90,10 +106,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/feedback") {
-    if (!(await isAdminRequest(request))) {
-      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
-      return;
-    }
+    if (!(await requireAdminRequest(request, response))) return;
 
     const summary = await statements.getAdminSummary.get();
     const rows = (await statements.getFeedback.all()).map(normalizeFeedback);
@@ -104,11 +117,29 @@ async function handleApi(request, response, url) {
     return;
   }
 
-  if (request.method === "GET" && url.pathname === "/api/admin/dashboard") {
-    if (!(await isAdminRequest(request))) {
-      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+  if (request.method === "POST" && url.pathname === "/api/admin/bootstrap") {
+    if (rateLimitRequest(request, response, `admin-bootstrap:ip:${clientIp(request)}`, rateLimitPresets.adminBootstrapIp)) return;
+
+    const session = await requireUser(request);
+    if (!session) {
+      sendJson(response, 401, { error: "UNAUTHENTICATED", message: "請先登入後再啟用管理員權限。" });
       return;
     }
+    if (rateLimitRequest(request, response, `admin-bootstrap:user:${session.user.id}`, rateLimitPresets.adminBootstrapUser)) return;
+
+    if (!isAdminTokenRequest(request)) {
+      sendJson(response, 401, { error: "ADMIN_TOKEN_REQUIRED", message: "Admin Token 不正確或尚未設定。" });
+      return;
+    }
+
+    clearRateLimit(`admin-bootstrap:user:${session.user.id}`);
+    const user = await statements.updateUserRole.get("admin", session.user.id);
+    sendJson(response, 200, { user: normalizeUser(user) });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/dashboard") {
+    if (!(await requireAdminRequest(request, response))) return;
 
     const adminSummary = normalizeAdminSummary(await statements.getAdminSummary.get());
     const moderationSummary = normalizeModerationSummary(await statements.getModerationSummary.get());
@@ -116,7 +147,6 @@ async function handleApi(request, response, url) {
       summary: {
         ...adminSummary,
         ...moderationSummary,
-        adminAccountsCount: config.adminEmails.length,
       },
       users: (await statements.getAdminUsers.all()).map(normalizeAdminAccount),
     });
@@ -170,10 +200,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/moderation") {
-    if (!(await isAdminRequest(request))) {
-      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
-      return;
-    }
+    if (!(await requireAdminRequest(request, response))) return;
 
     sendJson(response, 200, {
       summary: normalizeModerationSummary(await statements.getModerationSummary.get()),
@@ -185,10 +212,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/trades/hide") {
-    if (!(await isAdminRequest(request))) {
-      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
-      return;
-    }
+    if (!(await requireAdminRequest(request, response))) return;
 
     const body = await readJson(request);
     const ownerId = Number(body.ownerId);
@@ -206,10 +230,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/trades/unhide") {
-    if (!(await isAdminRequest(request))) {
-      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
-      return;
-    }
+    if (!(await requireAdminRequest(request, response))) return;
 
     const body = await readJson(request);
     await statements.unhideTrade.run(Number(body.ownerId), cleanText(body.tradeId, 64));
@@ -218,10 +239,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/comments/hide") {
-    if (!(await isAdminRequest(request))) {
-      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
-      return;
-    }
+    if (!(await requireAdminRequest(request, response))) return;
 
     const body = await readJson(request);
     const commentId = Number(body.commentId);
@@ -238,10 +256,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/comments/unhide") {
-    if (!(await isAdminRequest(request))) {
-      sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
-      return;
-    }
+    if (!(await requireAdminRequest(request, response))) return;
 
     const body = await readJson(request);
     await statements.unhideComment.run(Number(body.commentId));
@@ -250,10 +265,15 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/auth/register") {
+    const registerIpKey = `register:ip:${clientIp(request)}`;
+    if (rateLimitRequest(request, response, registerIpKey, rateLimitPresets.registerIp)) return;
+
     const body = await readJson(request);
     const name = cleanText(body.name, 32);
     const email = cleanEmail(body.email);
     const password = String(body.password || "");
+    const registerEmailKey = email ? `register:email:${email}` : "";
+    if (registerEmailKey && rateLimitRequest(request, response, registerEmailKey, rateLimitPresets.registerEmail)) return;
 
     if (!name || !email.includes("@") || password.length < 8) {
       sendJson(response, 400, { error: "INVALID_INPUT", message: "請輸入名稱、email，密碼至少 8 碼。" });
@@ -268,14 +288,21 @@ async function handleApi(request, response, url) {
     const { hash, salt } = hashPassword(password);
     const user = await statements.createUser.get(name, email, hash, salt);
     const session = await createSession(user.id);
+    clearRateLimit(registerEmailKey);
     sendJson(response, 201, { user: normalizeUser(user), ...session });
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/auth/login") {
+    const loginIpKey = `login:ip:${clientIp(request)}`;
+    if (rateLimitRequest(request, response, loginIpKey, rateLimitPresets.loginIp)) return;
+
     const body = await readJson(request);
     const email = cleanEmail(body.email);
     const password = String(body.password || "");
+    const loginEmailKey = email ? `login:email:${email}` : "";
+    if (loginEmailKey && rateLimitRequest(request, response, loginEmailKey, rateLimitPresets.loginEmail)) return;
+
     const user = await statements.getUserByEmail.get(email);
 
     if (!user || !verifyPassword(password, user.salt, user.password_hash)) {
@@ -284,13 +311,18 @@ async function handleApi(request, response, url) {
     }
 
     const session = await createSession(user.id);
+    clearRateLimit(loginEmailKey);
     sendJson(response, 200, { user: normalizeUser(user), ...session });
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/auth/forgot-password") {
+    if (rateLimitRequest(request, response, `password-reset:ip:${clientIp(request)}`, rateLimitPresets.passwordResetIp)) return;
+
     const body = await readJson(request);
     const email = cleanEmail(body.email);
+    if (email && rateLimitRequest(request, response, `password-reset:email:${email}`, rateLimitPresets.passwordResetEmail)) return;
+
     if (!email.includes("@")) {
       sendJson(response, 400, { error: "INVALID_EMAIL", message: "請輸入有效 email。" });
       return;
@@ -337,9 +369,13 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/auth/reset-password") {
+    if (rateLimitRequest(request, response, `reset-password:ip:${clientIp(request)}`, rateLimitPresets.resetPasswordIp)) return;
+
     const body = await readJson(request);
     const resetToken = cleanText(body.token, 220);
     const password = String(body.password || "");
+    const resetTokenKey = resetToken ? `reset-password:token:${hashToken(resetToken)}` : "";
+    if (resetTokenKey && rateLimitRequest(request, response, resetTokenKey, rateLimitPresets.resetPasswordToken)) return;
 
     if (!resetToken) {
       sendJson(response, 400, { error: "MISSING_TOKEN", message: "重設連結不完整。" });
@@ -362,6 +398,7 @@ async function handleApi(request, response, url) {
     await statements.markPasswordResetUsed.run(reset.reset_id);
     await statements.deleteUserSessions.run(reset.user_id);
     const session = await createSession(reset.user_id);
+    clearRateLimit(resetTokenKey);
     sendJson(response, 200, { user: normalizeUser(reset), ...session });
     return;
   }
@@ -735,6 +772,51 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function rateLimitRequest(request, response, key, options) {
+  const result = consumeRateLimit(key, options);
+  if (result.allowed) return false;
+
+  response.setHeader("Retry-After", String(result.retryAfter));
+  sendJson(response, 429, {
+    error: "TOO_MANY_REQUESTS",
+    message: `嘗試次數太多，請約 ${result.retryAfter} 秒後再試。`,
+    retryAfter: result.retryAfter,
+  });
+  return true;
+}
+
+function consumeRateLimit(key, { limit, windowMs }) {
+  if (!key) return { allowed: true, retryAfter: 0 };
+
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    pruneRateLimitBuckets(now);
+    return { allowed: true, retryAfter: 0 };
+  }
+
+  bucket.count += 1;
+  const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+  return {
+    allowed: bucket.count <= limit,
+    retryAfter,
+  };
+}
+
+function clearRateLimit(key) {
+  if (key) rateLimitBuckets.delete(key);
+}
+
+function pruneRateLimitBuckets(now = Date.now()) {
+  if (rateLimitBuckets.size < 500) return;
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (bucket.resetAt <= now) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+}
+
 function applySecurityHeaders(response) {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -788,6 +870,13 @@ function requestOrigin(request) {
   return `${proto}://${host}`;
 }
 
+function clientIp(request) {
+  const forwarded = cleanText(request.headers["x-forwarded-for"], 240).split(",")[0].trim();
+  const cloudflare = cleanText(request.headers["cf-connecting-ip"], 80);
+  const socketAddress = cleanText(request.socket?.remoteAddress, 80);
+  return forwarded || cloudflare || socketAddress || "unknown";
+}
+
 function cleanFeedbackCategory(value) {
   const category = cleanText(value, 24);
   return ["bug", "idea", "ux", "other"].includes(category) ? category : "other";
@@ -803,12 +892,32 @@ function cleanReportReason(value) {
   return ["spam", "abuse", "misleading", "personal", "other"].includes(reason) ? reason : "other";
 }
 
-async function isAdminRequest(request) {
-  const token = cleanText(request.headers["x-admin-token"], 200);
-  if (config.adminToken && token && token === config.adminToken) return true;
+async function requireAdminRequest(request, response) {
+  const adminToken = cleanText(request.headers["x-admin-token"], 200);
+  if (adminToken) {
+    if (isAdminTokenValue(adminToken)) return true;
+    if (rateLimitRequest(request, response, `admin-token:ip:${clientIp(request)}`, rateLimitPresets.adminTokenIp)) {
+      return false;
+    }
+  }
 
   const session = await requireUser(request);
-  return session?.user.role === "admin";
+  if (session?.user.role === "admin") return true;
+
+  sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
+  return false;
+}
+
+function isAdminTokenRequest(request) {
+  const token = cleanText(request.headers["x-admin-token"], 200);
+  return isAdminTokenValue(token);
+}
+
+function isAdminTokenValue(token) {
+  if (!config.adminToken || !token) return false;
+  const expected = Buffer.from(config.adminToken);
+  const provided = Buffer.from(token);
+  return expected.length === provided.length && timingSafeEqual(expected, provided);
 }
 
 function normalizeUser(user) {
@@ -822,8 +931,7 @@ function normalizeUser(user) {
 }
 
 function userRole(user) {
-  const email = String(user?.email || "").toLowerCase();
-  return user?.role === "admin" || config.adminEmails.includes(email) ? "admin" : "user";
+  return user?.role === "admin" ? "admin" : "user";
 }
 
 function normalizeFeedback(row) {
@@ -849,6 +957,7 @@ function normalizeFeedback(row) {
 function normalizeAdminSummary(row) {
   return {
     usersCount: Math.max(0, Math.round(finiteNumber(row?.users_count, 0))),
+    adminAccountsCount: Math.max(0, Math.round(finiteNumber(row?.admin_users_count, 0))),
     syncedAccountsCount: Math.max(0, Math.round(finiteNumber(row?.synced_accounts_count, 0))),
     feedbackCount: Math.max(0, Math.round(finiteNumber(row?.feedback_count, 0))),
     newFeedbackCount: Math.max(0, Math.round(finiteNumber(row?.new_feedback_count, 0))),

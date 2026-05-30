@@ -1,5 +1,6 @@
 import { els } from "./dom.js";
 import {
+  bootstrapAdmin,
   clearToken,
   commentOnPublicTrade,
   followUser,
@@ -121,6 +122,7 @@ const app = {
   resetPasswordToken: "",
   profileModalOpen: false,
   profileBusy: false,
+  adminBootstrapBusy: false,
   legalModalOpen: false,
   activeLegalDoc: "risk",
   feedbackModalOpen: false,
@@ -521,6 +523,12 @@ function bindEvents(app) {
     }
   });
   app.els.profileSubmit.addEventListener("click", () => submitProfile(app));
+  app.els.adminBootstrapSubmit.addEventListener("click", () => submitAdminBootstrap(app));
+  app.els.adminBootstrapToken.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      submitAdminBootstrap(app);
+    }
+  });
   [
     app.els.profileName,
     app.els.profileEmail,
@@ -819,6 +827,7 @@ function openProfileModal(app) {
   app.els.profileEmail.value = app.user.email || "";
   app.els.profileCurrentPassword.value = "";
   app.els.profileNewPassword.value = "";
+  app.els.adminBootstrapToken.value = "";
   setProfileMessage(app, "");
   renderAll(app);
   app.els.profileName.focus();
@@ -853,6 +862,32 @@ async function submitProfile(app) {
     setProfileMessage(app, error.message, "error");
   } finally {
     app.profileBusy = false;
+    renderAll(app);
+  }
+}
+
+async function submitAdminBootstrap(app) {
+  if (!app.user || app.adminBootstrapBusy) return;
+
+  const adminToken = app.els.adminBootstrapToken.value.trim();
+  if (!adminToken) {
+    setProfileMessage(app, "請輸入 Admin Token。", "error");
+    return;
+  }
+
+  app.adminBootstrapBusy = true;
+  setProfileMessage(app, "啟用管理員權限中...");
+  renderAll(app);
+
+  try {
+    const { user } = await bootstrapAdmin(adminToken);
+    app.user = user;
+    app.els.adminBootstrapToken.value = "";
+    setProfileMessage(app, "管理員權限已啟用。", "ok");
+  } catch (error) {
+    setProfileMessage(app, error.message, "error");
+  } finally {
+    app.adminBootstrapBusy = false;
     renderAll(app);
   }
 }

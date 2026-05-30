@@ -20,7 +20,6 @@ HOST=0.0.0.0
 PORT=8787
 NOVAX_PUBLIC_ORIGIN=https://your-domain.example
 NOVAX_SESSION_DAYS=14
-NOVAX_ADMIN_EMAILS=founder@example.com
 NOVAX_ADMIN_TOKEN=change-this-to-a-long-random-secret
 NOVAX_PASSWORD_RESET_MINUTES=30
 ```
@@ -52,7 +51,7 @@ NOVAX_SUPPORT_EMAIL=support@your-domain.example
 
 沒有設定 `RESEND_API_KEY` 與 `NOVAX_EMAIL_FROM` 時，production 不會寄出重設信；本機 development 會在畫面顯示測試用連結。
 
-`NOVAX_ADMIN_EMAILS` 可以填一個或多個管理員 email，用逗號分隔。使用這些 email 註冊或登入後，帳號區會顯示「後臺」，可以查看所有帳號摘要、回饋與內容檢舉。
+管理員權限會存在資料庫的帳號角色中，不會只靠 email 自動授權。先設定 `NOVAX_ADMIN_TOKEN`，再用要成為管理員的帳號登入，打開「資料」視窗並輸入 Admin Token。成功後帳號區會顯示「後臺」，可以查看所有帳號摘要、回饋與內容檢舉。
 
 ## 2. 啟動檢查
 
@@ -115,4 +114,4 @@ Health check:
 
 產品文字必須明確表示這是模擬交易與投資學習工具，不提供真實入金、出金、代操或投資建議。
 
-管理者入口目前包含「後臺」、「管理回饋」與「內容管理」。推薦用 `NOVAX_ADMIN_EMAILS` 指定管理員帳號，`NOVAX_ADMIN_TOKEN` 仍可作為備用管理金鑰。公開測試前請確認檢舉、隱藏公開交易、隱藏留言與解除隱藏流程都能正常運作。
+管理者入口目前包含「後臺」、「管理回饋」與「內容管理」。推薦用 `NOVAX_ADMIN_TOKEN` 升級少數可信任帳號，升級後再保管好 token。公開測試前請確認檢舉、隱藏公開交易、隱藏留言與解除隱藏流程都能正常運作。

@@ -18,7 +18,7 @@ export default defineConfig({
     timeout: 15000,
     env: {
       ...process.env,
-      NOVAX_ADMIN_EMAILS: "e2e-admin@novax.local",
+      NOVAX_ADMIN_TOKEN: "e2e-admin-token",
     },
   },
   projects: [

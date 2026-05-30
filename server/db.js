@@ -10,6 +10,7 @@ const sqliteSchema = `
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -141,6 +142,7 @@ const postgresSchema = `
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -252,15 +254,21 @@ const statementSql = {
   createUser: `
     INSERT INTO users (name, email, password_hash, salt)
     VALUES (?, ?, ?, ?)
-    RETURNING id, name, email, created_at
+    RETURNING id, name, email, role, created_at
   `,
-  getUserByEmail: "SELECT id, name, email, password_hash, salt, created_at FROM users WHERE email = ?",
-  getUserById: "SELECT id, name, email, password_hash, salt, created_at FROM users WHERE id = ?",
+  getUserByEmail: "SELECT id, name, email, role, password_hash, salt, created_at FROM users WHERE email = ?",
+  getUserById: "SELECT id, name, email, role, password_hash, salt, created_at FROM users WHERE id = ?",
   updateUserProfile: `
     UPDATE users
     SET name = ?, email = ?
     WHERE id = ?
-    RETURNING id, name, email, created_at
+    RETURNING id, name, email, role, created_at
+  `,
+  updateUserRole: `
+    UPDATE users
+    SET role = ?
+    WHERE id = ?
+    RETURNING id, name, email, role, created_at
   `,
   updateUserPassword: "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
   createSession: `
@@ -268,7 +276,7 @@ const statementSql = {
     VALUES (?, ?, ?)
   `,
   getSession: `
-    SELECT users.id, users.name, users.email, users.created_at, sessions.expires_at
+    SELECT users.id, users.name, users.email, users.role, users.created_at, sessions.expires_at
     FROM sessions
     JOIN users ON users.id = sessions.user_id
     WHERE sessions.token_hash = ?
@@ -289,6 +297,7 @@ const statementSql = {
       users.id,
       users.name,
       users.email,
+      users.role,
       users.created_at
     FROM password_reset_tokens
     JOIN users ON users.id = password_reset_tokens.user_id
@@ -490,6 +499,7 @@ const statementSql = {
   getAdminSummary: `
     SELECT
       (SELECT COUNT(*) FROM users) AS users_count,
+      (SELECT COUNT(*) FROM users WHERE role = 'admin') AS admin_users_count,
       (SELECT COUNT(*) FROM accounts) AS synced_accounts_count,
       (SELECT COUNT(*) FROM feedback) AS feedback_count,
       (SELECT COUNT(*) FROM feedback WHERE status = 'new') AS new_feedback_count
@@ -499,6 +509,7 @@ const statementSql = {
       users.id,
       users.name,
       users.email,
+      users.role,
       users.created_at,
       accounts.equity,
       accounts.roi,
@@ -639,6 +650,7 @@ function createSqliteDatabase() {
   raw.exec("PRAGMA foreign_keys = ON");
   raw.exec("PRAGMA journal_mode = WAL");
   raw.exec(sqliteSchema);
+  migrateSqliteDatabase(raw);
 
   return {
     raw,
@@ -656,6 +668,7 @@ async function createPostgresDatabase() {
   });
 
   await raw.query(postgresSchema);
+  await migratePostgresDatabase(raw);
 
   return {
     raw,
@@ -663,6 +676,31 @@ async function createPostgresDatabase() {
     location: config.databaseDisplay,
     statements: prepareStatements((sql) => preparePostgresStatement(raw, sql)),
   };
+}
+
+function migrateSqliteDatabase(raw) {
+  const userColumns = raw.prepare("PRAGMA table_info(users)").all();
+  if (!userColumns.some((column) => column.name === "role")) {
+    raw.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+  }
+}
+
+async function migratePostgresDatabase(raw) {
+  await raw.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'");
+  await raw.query("UPDATE users SET role = 'user' WHERE role IS NULL OR role NOT IN ('user', 'admin')");
+  await raw.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'users_role_check'
+          AND conrelid = 'users'::regclass
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('user', 'admin'));
+      END IF;
+    END $$;
+  `);
 }
 
 function prepareStatements(prepare) {

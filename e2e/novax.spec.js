@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { db } from "../server/db.js";
+import { closeDatabase, db } from "../server/db.js";
 
 const testAccountPattern = "e2e-%@novax.local";
 
@@ -7,6 +7,10 @@ test.afterEach(() => {
   db.prepare("DELETE FROM content_reports WHERE details LIKE ?").run("E2E report%");
   db.prepare("DELETE FROM users WHERE email LIKE ?").run(testAccountPattern);
   db.prepare("DELETE FROM feedback WHERE body LIKE ?").run("E2E feedback%");
+});
+
+test.afterAll(async () => {
+  await closeDatabase();
 });
 
 test("renders the trading shell and switches market controls", async ({ page }) => {
@@ -90,6 +94,28 @@ test("uses the mobile bottom navigation", async ({ page }) => {
   await expect(page.locator("#authModal")).toBeVisible();
 });
 
+test("rate limits repeated login failures", async ({ request }) => {
+  const email = `e2e-rate-${Date.now().toString(36)}@novax.local`;
+
+  for (let index = 0; index < 8; index += 1) {
+    const response = await request.post("/api/auth/login", {
+      data: { email, password: "wrong-password" },
+    });
+    expect(response.status()).toBe(401);
+  }
+
+  const blocked = await request.post("/api/auth/login", {
+    data: { email, password: "wrong-password" },
+  });
+  expect(blocked.status()).toBe(429);
+  expect(blocked.headers()["retry-after"]).toBeTruthy();
+  expect(await blocked.json()).toEqual(
+    expect.objectContaining({
+      error: "TOO_MANY_REQUESTS",
+    }),
+  );
+});
+
 test("registers, edits profile, and logs in with the updated password", async ({ page }) => {
   const suffix = Date.now().toString(36);
   const email = `e2e-profile-${suffix}@novax.local`;
@@ -160,6 +186,10 @@ test("opens the back office for admin accounts", async ({ page }) => {
     password: "password123",
   });
 
+  await expect(page.locator("#authUserName")).toHaveText("E2E Admin");
+  await expect(page.locator("#openAdminDashboard")).toBeHidden();
+  await bootstrapAdminViaApi(page);
+  await page.reload();
   await expect(page.locator("#authUserName")).toHaveText("E2E Admin · 管理員");
   await expect(page.locator("#openAdminDashboard")).toBeVisible();
 
@@ -403,4 +433,20 @@ async function ensureAuthMode(page, mode) {
   if ((mode === "register" && !isRegister) || (mode === "login" && isRegister)) {
     await page.locator("#authModeToggle").click();
   }
+}
+
+async function bootstrapAdminViaApi(page) {
+  await page.evaluate(async () => {
+    const token = localStorage.getItem("novax-auth-token");
+    const response = await fetch("/api/admin/bootstrap", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Admin-Token": "e2e-admin-token",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Admin bootstrap failed: ${response.status} ${await response.text()}`);
+    }
+  });
 }

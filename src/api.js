@@ -145,6 +145,13 @@ export async function getAdminFeedback(adminToken) {
   });
 }
 
+export async function bootstrapAdmin(adminToken) {
+  return request("/api/admin/bootstrap", {
+    method: "POST",
+    headers: { "X-Admin-Token": adminToken },
+  });
+}
+
 export async function getAdminDashboard(adminToken = "") {
   return request("/api/admin/dashboard", {
     headers: adminToken ? { "X-Admin-Token": adminToken } : {},

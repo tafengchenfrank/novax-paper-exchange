@@ -51,6 +51,5 @@ export async function requireUser(request) {
 }
 
 function userRole(row) {
-  const email = String(row.email || "").toLowerCase();
-  return row.role === "admin" || config.adminEmails.includes(email) ? "admin" : "user";
+  return row.role === "admin" ? "admin" : "user";
 }

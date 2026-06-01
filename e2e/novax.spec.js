@@ -4,6 +4,7 @@ import { closeDatabase, db } from "../server/db.js";
 const testAccountPattern = "e2e-%@novax.local";
 
 test.afterEach(() => {
+  db.prepare("DELETE FROM admin_audit_logs").run();
   db.prepare("DELETE FROM content_reports WHERE details LIKE ?").run("E2E report%");
   db.prepare("DELETE FROM users WHERE email LIKE ?").run(testAccountPattern);
   db.prepare("DELETE FROM feedback WHERE body LIKE ?").run("E2E feedback%");
@@ -178,11 +179,15 @@ test("registers, edits profile, and logs in with the updated password", async ({
   await expect(page.locator("#authUserName")).toHaveText("E2E Captain");
 });
 
-test("opens the back office for admin accounts", async ({ page }) => {
+test("opens the back office for admin accounts", async ({ page, request }) => {
+  const suffix = Date.now().toString(36);
+  const adminEmail = `e2e-admin-${suffix}@novax.local`;
+  const staffEmail = `e2e-staff-${suffix}@novax.local`;
+
   await gotoCleanApp(page);
   await registerViaUi(page, {
     name: "E2E Admin",
-    email: "e2e-admin@novax.local",
+    email: adminEmail,
     password: "password123",
   });
 
@@ -193,15 +198,36 @@ test("opens the back office for admin accounts", async ({ page }) => {
   await expect(page.locator("#authUserName")).toHaveText("E2E Admin · 管理員");
   await expect(page.locator("#openAdminDashboard")).toBeVisible();
 
+  const staffResponse = await request.post("/api/auth/register", {
+    data: {
+      name: "E2E Staff",
+      email: staffEmail,
+      password: "password123",
+    },
+  });
+  expect(staffResponse.status()).toBe(201);
+
   await page.locator("#openAdminDashboard").click();
   await expect(page.locator("#adminDashboardModal")).toBeVisible();
   await expect(page.locator("#adminDashboardSummary")).toContainText("註冊帳號");
   await expect(page.locator("#adminDashboardSummary")).toContainText("待處理檢舉");
-  await expect(page.locator("#adminUserList")).toContainText("e2e-admin@novax.local");
+  await expect(page.locator("#adminUserList")).toContainText(adminEmail);
+  await expect(page.locator("#adminAuditList")).toContainText("啟用管理員");
 
-  await page.locator("#adminUserSearch").fill("e2e-admin");
+  await page.locator("#adminUserSearch").fill(adminEmail);
   await expect(page.locator("#adminUserList")).toContainText("E2E Admin");
   await expect(page.locator("#adminUserList")).toContainText("管理員");
+  await page.locator("#adminUserSearch").fill(staffEmail);
+  const staffItem = page.locator(".admin-user-item").filter({ hasText: staffEmail });
+  await expect(staffItem).toContainText("一般帳號");
+  await staffItem.getByRole("button", { name: "設為管理員" }).click();
+  await expect(page.locator("#adminDashboardMessage")).toHaveText("管理員權限已更新。");
+  await expect(staffItem).toContainText("管理員");
+  await expect(page.locator("#adminAuditList")).toContainText("角色變更");
+  await expect(page.locator("#adminAuditList")).toContainText("E2E Staff");
+  await staffItem.getByRole("button", { name: "撤銷管理員" }).click();
+  await expect(page.locator("#adminDashboardMessage")).toHaveText("管理員權限已更新。");
+  await expect(staffItem).toContainText("一般帳號");
   await page.keyboard.press("Escape");
   await expect(page.locator("#adminDashboardModal")).toBeHidden();
 

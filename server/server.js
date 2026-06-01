@@ -106,7 +106,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/feedback") {
-    if (!(await requireAdminRequest(request, response))) return;
+    if (!(await getAdminContext(request, response))) return;
 
     const summary = await statements.getAdminSummary.get();
     const rows = (await statements.getFeedback.all()).map(normalizeFeedback);
@@ -134,12 +134,20 @@ async function handleApi(request, response, url) {
 
     clearRateLimit(`admin-bootstrap:user:${session.user.id}`);
     const user = await statements.updateUserRole.get("admin", session.user.id);
+    await createAdminAuditLog(
+      { session, viaToken: true },
+      "admin_bootstrap",
+      "user",
+      String(session.user.id),
+      session.user.id,
+      { email: user.email, name: user.name },
+    );
     sendJson(response, 200, { user: normalizeUser(user) });
     return;
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/dashboard") {
-    if (!(await requireAdminRequest(request, response))) return;
+    if (!(await getAdminContext(request, response))) return;
 
     const adminSummary = normalizeAdminSummary(await statements.getAdminSummary.get());
     const moderationSummary = normalizeModerationSummary(await statements.getModerationSummary.get());
@@ -149,7 +157,54 @@ async function handleApi(request, response, url) {
         ...moderationSummary,
       },
       users: (await statements.getAdminUsers.all()).map(normalizeAdminAccount),
+      auditLogs: (await statements.getAdminAuditLogs.all()).map(normalizeAdminAuditLog),
     });
+    return;
+  }
+
+  const adminUserRoleMatch = url.pathname.match(/^\/api\/admin\/users\/(\d+)\/role$/);
+  if (request.method === "PATCH" && adminUserRoleMatch) {
+    const adminContext = await getAdminContext(request, response);
+    if (!adminContext) return;
+
+    const targetId = Number(adminUserRoleMatch[1]);
+    const body = await readJson(request);
+    const role = cleanAdminRole(body.role);
+    if (!targetId || !role) {
+      sendJson(response, 400, { error: "INVALID_ROLE", message: "管理員角色設定不正確。" });
+      return;
+    }
+
+    const target = await statements.getUserById.get(targetId);
+    if (!target) {
+      sendJson(response, 404, { error: "USER_NOT_FOUND", message: "找不到這個帳號。" });
+      return;
+    }
+
+    if (adminContext.session?.user.id === target.id && role !== "admin") {
+      sendJson(response, 400, { error: "SELF_DEMOTE", message: "不能撤銷自己的管理員權限。" });
+      return;
+    }
+
+    if (target.role === "admin" && role === "user") {
+      const adminCount = await statements.getAdminCount.get();
+      if (finiteNumber(adminCount?.count, 0) <= 1) {
+        sendJson(response, 400, { error: "LAST_ADMIN", message: "至少需要保留一個管理員帳號。" });
+        return;
+      }
+    }
+
+    const updated = target.role === role ? target : await statements.updateUserRole.get(role, target.id);
+    if (target.role !== role) {
+      await createAdminAuditLog(adminContext, "admin_role_update", "user", String(target.id), target.id, {
+        fromRole: userRole(target),
+        toRole: userRole(updated),
+        email: target.email,
+        name: target.name,
+      });
+    }
+
+    sendJson(response, 200, { user: normalizeUser(updated) });
     return;
   }
 
@@ -200,7 +255,7 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/moderation") {
-    if (!(await requireAdminRequest(request, response))) return;
+    if (!(await getAdminContext(request, response))) return;
 
     sendJson(response, 200, {
       summary: normalizeModerationSummary(await statements.getModerationSummary.get()),
@@ -212,7 +267,8 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/trades/hide") {
-    if (!(await requireAdminRequest(request, response))) return;
+    const adminContext = await getAdminContext(request, response);
+    if (!adminContext) return;
 
     const body = await readJson(request);
     const ownerId = Number(body.ownerId);
@@ -225,41 +281,69 @@ async function handleApi(request, response, url) {
 
     await statements.hideTrade.run(ownerId, tradeId, reason);
     await statements.markTradeReportsActioned.run(ownerId, tradeId);
+    await createAdminAuditLog(adminContext, "hide_trade", "trade", publicTradeKey(ownerId, tradeId), ownerId, {
+      ownerId,
+      tradeId,
+      reason,
+    });
     sendJson(response, 200, { ok: true });
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/trades/unhide") {
-    if (!(await requireAdminRequest(request, response))) return;
+    const adminContext = await getAdminContext(request, response);
+    if (!adminContext) return;
 
     const body = await readJson(request);
-    await statements.unhideTrade.run(Number(body.ownerId), cleanText(body.tradeId, 64));
+    const ownerId = Number(body.ownerId);
+    const tradeId = cleanText(body.tradeId, 64);
+    await statements.unhideTrade.run(ownerId, tradeId);
+    await createAdminAuditLog(adminContext, "unhide_trade", "trade", publicTradeKey(ownerId, tradeId), ownerId, {
+      ownerId,
+      tradeId,
+    });
     sendJson(response, 200, { ok: true });
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/comments/hide") {
-    if (!(await requireAdminRequest(request, response))) return;
+    const adminContext = await getAdminContext(request, response);
+    if (!adminContext) return;
 
     const body = await readJson(request);
     const commentId = Number(body.commentId);
     const reason = cleanText(body.reason, 240) || "違反社群規範";
-    if (!commentId || !(await statements.getTradeCommentById.get(commentId))) {
+    const comment = commentId ? await statements.getTradeCommentById.get(commentId) : null;
+    if (!comment) {
       sendJson(response, 404, { error: "COMMENT_NOT_FOUND", message: "找不到留言。" });
       return;
     }
 
     await statements.hideComment.run(commentId, reason);
     await statements.markCommentReportsActioned.run(commentId);
+    await createAdminAuditLog(adminContext, "hide_comment", "comment", String(commentId), comment.author_id, {
+      commentId,
+      ownerId: comment.owner_id,
+      tradeId: comment.trade_id,
+      reason,
+    });
     sendJson(response, 200, { ok: true });
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/admin/moderation/comments/unhide") {
-    if (!(await requireAdminRequest(request, response))) return;
+    const adminContext = await getAdminContext(request, response);
+    if (!adminContext) return;
 
     const body = await readJson(request);
-    await statements.unhideComment.run(Number(body.commentId));
+    const commentId = Number(body.commentId);
+    const comment = commentId ? await statements.getTradeCommentById.get(commentId) : null;
+    await statements.unhideComment.run(commentId);
+    await createAdminAuditLog(adminContext, "unhide_comment", "comment", String(commentId), comment?.author_id || null, {
+      commentId,
+      ownerId: comment?.owner_id || null,
+      tradeId: comment?.trade_id || "",
+    });
     sendJson(response, 200, { ok: true });
     return;
   }
@@ -835,7 +919,7 @@ function handleCors(request, response) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
     response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
-    response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Token");
   }
 
   if (request.method !== "OPTIONS") return false;
@@ -892,20 +976,26 @@ function cleanReportReason(value) {
   return ["spam", "abuse", "misleading", "personal", "other"].includes(reason) ? reason : "other";
 }
 
-async function requireAdminRequest(request, response) {
+function cleanAdminRole(value) {
+  const role = cleanText(value, 16);
+  return ["user", "admin"].includes(role) ? role : "";
+}
+
+async function getAdminContext(request, response) {
   const adminToken = cleanText(request.headers["x-admin-token"], 200);
+  const session = await requireUser(request);
+
   if (adminToken) {
-    if (isAdminTokenValue(adminToken)) return true;
+    if (isAdminTokenValue(adminToken)) return { session, viaToken: true };
     if (rateLimitRequest(request, response, `admin-token:ip:${clientIp(request)}`, rateLimitPresets.adminTokenIp)) {
-      return false;
+      return null;
     }
   }
 
-  const session = await requireUser(request);
-  if (session?.user.role === "admin") return true;
+  if (session?.user.role === "admin") return { session, viaToken: false };
 
   sendJson(response, 401, { error: "ADMIN_REQUIRED", message: "需要管理者權限。" });
-  return false;
+  return null;
 }
 
 function isAdminTokenRequest(request) {
@@ -979,6 +1069,35 @@ function normalizeAdminAccount(row) {
     followingCount: Math.max(0, Math.round(finiteNumber(row.following_count, 0))),
     feedbackCount: Math.max(0, Math.round(finiteNumber(row.feedback_count, 0))),
     reportsMadeCount: Math.max(0, Math.round(finiteNumber(row.reports_made_count, 0))),
+  };
+}
+
+function normalizeAdminAuditLog(row) {
+  return {
+    id: row.id,
+    action: cleanText(row.action, 64),
+    targetType: cleanText(row.target_type, 32),
+    targetId: cleanText(row.target_id, 160),
+    details: parseSnapshot(row.details),
+    createdAt: row.created_at,
+    actor: row.actor_id
+      ? {
+          id: row.actor_id,
+          name: cleanText(row.actor_name, 32) || "管理員",
+          email: cleanEmail(row.actor_email),
+        }
+      : {
+          id: null,
+          name: "Admin Token",
+          email: "",
+        },
+    targetUser: row.target_user_id
+      ? {
+          id: row.target_user_id,
+          name: cleanText(row.target_user_name, 32) || "使用者",
+          email: cleanEmail(row.target_user_email),
+        }
+      : null,
   };
 }
 
@@ -1167,6 +1286,17 @@ async function createNotification(recipientId, actorId, type, ownerId = null, tr
     ownerId,
     tradeId ? cleanText(tradeId, 64) : null,
     body ? cleanText(body, 240) : null,
+  );
+}
+
+async function createAdminAuditLog(adminContext, action, targetType = "", targetId = "", targetUserId = null, details = {}) {
+  await statements.createAdminAuditLog.get(
+    adminContext?.session?.user?.id || null,
+    cleanText(action, 64),
+    cleanText(targetType, 32) || null,
+    targetId ? cleanText(targetId, 160) : null,
+    targetUserId ? Number(targetUserId) : null,
+    JSON.stringify(details || {}),
   );
 }
 

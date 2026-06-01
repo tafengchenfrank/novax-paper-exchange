@@ -32,6 +32,7 @@ import {
   unfollowUser,
   unlikePublicTrade,
   updateProfile,
+  updateAdminUserRole,
 } from "./api.js";
 import { formatChartPrice } from "./formatters.js";
 import { learningLessons } from "./learning.js";
@@ -134,6 +135,7 @@ const app = {
   adminDashboardOpen: false,
   adminDashboardBusy: false,
   adminDashboardData: null,
+  adminRoleBusyUserId: null,
   adminUserSearch: "",
   reportModalOpen: false,
   reportBusy: false,
@@ -600,6 +602,11 @@ function bindEvents(app) {
     app.adminUserSearch = app.els.adminUserSearch.value;
     renderAll(app);
   });
+  app.els.adminUserList.addEventListener("click", (event) => {
+    const button = event.target?.closest?.("[data-admin-role-user]");
+    if (!button) return;
+    updateAdminRoleFromDashboard(app, button.dataset.adminRoleUser, button.dataset.adminRole);
+  });
   app.els.closeReport.addEventListener("click", () => closeReportModal(app));
   app.els.reportModal.addEventListener("click", (event) => {
     if (event.target?.dataset?.reportClose !== undefined) {
@@ -1049,6 +1056,7 @@ async function logout(app) {
   app.adminFeedbackSummary = null;
   app.adminDashboardOpen = false;
   app.adminDashboardData = null;
+  app.adminRoleBusyUserId = null;
   app.adminUserSearch = "";
   app.adminModerationOpen = false;
   app.adminModerationData = null;
@@ -1218,6 +1226,32 @@ async function loadAdminDashboard(app) {
   }
 }
 
+async function updateAdminRoleFromDashboard(app, userId, role) {
+  if (app.adminDashboardBusy || app.adminRoleBusyUserId || !userId || !["admin", "user"].includes(role)) return;
+
+  if (String(app.user?.id) === String(userId) && role === "user") {
+    setAdminDashboardMessage(app, "不能撤銷自己的管理員權限。", "error");
+    return;
+  }
+
+  app.adminDashboardBusy = true;
+  app.adminRoleBusyUserId = String(userId);
+  setAdminDashboardMessage(app, role === "admin" ? "正在設為管理員..." : "正在撤銷管理員...");
+  renderAll(app);
+
+  try {
+    await updateAdminUserRole(userId, role);
+    app.adminDashboardData = await getAdminDashboard();
+    setAdminDashboardMessage(app, "管理員權限已更新。", "ok");
+  } catch (error) {
+    setAdminDashboardMessage(app, error.message, "error");
+  } finally {
+    app.adminDashboardBusy = false;
+    app.adminRoleBusyUserId = null;
+    renderAll(app);
+  }
+}
+
 function openReportModal(app, target) {
   if (!app.user) {
     app.authMode = "login";
@@ -1345,6 +1379,9 @@ async function handleModerationAction(app, action, dataset) {
     }
 
     app.adminModerationData = await getAdminModeration(token);
+    if (app.adminDashboardData && isAdminUser(app)) {
+      app.adminDashboardData = await getAdminDashboard();
+    }
     await refreshFeed(app, { silent: true, force: true });
     if (app.publicProfileOpen) await refreshPublicProfile(app);
     setAdminModerationMessage(app, "已更新內容狀態。", "ok");

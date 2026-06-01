@@ -133,6 +133,19 @@ const sqliteSchema = `
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (comment_id) REFERENCES trade_comments(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id INTEGER,
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id TEXT,
+    target_user_id INTEGER,
+    details TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE SET NULL
+  );
 `;
 
 const postgresSchema = `
@@ -245,6 +258,17 @@ const postgresSchema = `
     reason TEXT NOT NULL,
     details TEXT,
     status TEXT NOT NULL DEFAULT 'open',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    id SERIAL PRIMARY KEY,
+    actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id TEXT,
+    target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    details TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 `;
@@ -523,6 +547,32 @@ const statementSql = {
     LEFT JOIN accounts ON accounts.user_id = users.id
     ORDER BY users.created_at DESC, users.id DESC
     LIMIT 100
+  `,
+  getAdminCount: "SELECT COUNT(*) AS count FROM users WHERE role = 'admin'",
+  createAdminAuditLog: `
+    INSERT INTO admin_audit_logs (actor_id, action, target_type, target_id, target_user_id, details)
+    VALUES (?, ?, ?, ?, ?, ?)
+    RETURNING id, actor_id, action, target_type, target_id, target_user_id, details, created_at
+  `,
+  getAdminAuditLogs: `
+    SELECT
+      admin_audit_logs.id,
+      admin_audit_logs.actor_id,
+      admin_audit_logs.action,
+      admin_audit_logs.target_type,
+      admin_audit_logs.target_id,
+      admin_audit_logs.target_user_id,
+      admin_audit_logs.details,
+      admin_audit_logs.created_at,
+      actor.name AS actor_name,
+      actor.email AS actor_email,
+      target_user.name AS target_user_name,
+      target_user.email AS target_user_email
+    FROM admin_audit_logs
+    LEFT JOIN users actor ON actor.id = admin_audit_logs.actor_id
+    LEFT JOIN users target_user ON target_user.id = admin_audit_logs.target_user_id
+    ORDER BY admin_audit_logs.created_at DESC, admin_audit_logs.id DESC
+    LIMIT 50
   `,
   getHiddenTradeKeys: "SELECT owner_id, trade_id FROM hidden_public_trades",
   getHiddenComment: "SELECT comment_id FROM hidden_trade_comments WHERE comment_id = ?",

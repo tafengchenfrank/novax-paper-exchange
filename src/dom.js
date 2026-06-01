@@ -162,6 +162,7 @@ export const els = {
   adminDashboardSummary: document.querySelector("#adminDashboardSummary"),
   adminUserSearch: document.querySelector("#adminUserSearch"),
   adminUserList: document.querySelector("#adminUserList"),
+  adminAuditList: document.querySelector("#adminAuditList"),
   reportModal: document.querySelector("#reportModal"),
   closeReport: document.querySelector("#closeReport"),
   reportReason: document.querySelector("#reportReason"),

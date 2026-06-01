@@ -159,6 +159,13 @@ export async function getAdminDashboard(adminToken = "") {
   });
 }
 
+export async function updateAdminUserRole(userId, role) {
+  return request(`/api/admin/users/${encodeURIComponent(userId)}/role`, {
+    method: "PATCH",
+    body: { role },
+  });
+}
+
 export async function reportContent({ targetType, ownerId, tradeId, commentId, reason, details }) {
   return request("/api/reports", {
     method: "POST",

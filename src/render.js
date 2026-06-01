@@ -1252,13 +1252,16 @@ function renderAdminDashboard(app) {
 
   if (!data) {
     app.els.adminUserList.innerHTML = "";
+    app.els.adminAuditList.innerHTML = "";
     return;
   }
 
   const users = filteredAdminUsers(app);
   app.els.adminUserList.innerHTML = users.length
-    ? users.map(adminUserRow).join("")
+    ? users.map((user) => adminUserRow(app, user)).join("")
     : `<div class="empty-state admin-feedback-empty">沒有符合條件的帳號。</div>`;
+
+  renderAdminAudit(app);
 }
 
 function filteredAdminUsers(app) {
@@ -1271,8 +1274,13 @@ function filteredAdminUsers(app) {
   );
 }
 
-function adminUserRow(user) {
+function adminUserRow(app, user) {
   const isAdmin = user.role === "admin";
+  const nextRole = isAdmin ? "user" : "admin";
+  const isSelf = String(user.id) === String(app.user?.id);
+  const isBusy = app.adminDashboardBusy || String(app.adminRoleBusyUserId || "") === String(user.id);
+  const disabled = isBusy || (isSelf && isAdmin);
+  const actionLabel = isAdmin ? "撤銷管理員" : "設為管理員";
   return `
     <article class="admin-feedback-item admin-user-item ${isAdmin ? "is-admin" : ""}">
       <div class="admin-feedback-head">
@@ -1288,8 +1296,107 @@ function adminUserRow(user) {
         <div><dt>追蹤者 / 中</dt><dd>${amount(user.followersCount || 0, 0)} / ${amount(user.followingCount || 0, 0)}</dd></div>
         <div><dt>回饋 / 檢舉</dt><dd>${amount(user.feedbackCount || 0, 0)} / ${amount(user.reportsMadeCount || 0, 0)}</dd></div>
       </dl>
+      <div class="moderation-actions">
+        <button
+          class="tiny-action"
+          type="button"
+          data-admin-role-user="${escapeHtml(user.id)}"
+          data-admin-role="${escapeHtml(nextRole)}"
+          ${disabled ? "disabled" : ""}
+        >
+          ${escapeHtml(isSelf && isAdmin ? "目前帳號" : actionLabel)}
+        </button>
+      </div>
     </article>
   `;
+}
+
+function renderAdminAudit(app) {
+  const logs = app.adminDashboardData?.auditLogs || [];
+  app.els.adminAuditList.innerHTML = logs.length
+    ? logs.map(adminAuditRow).join("")
+    : `<div class="empty-state admin-feedback-empty">目前還沒有管理操作紀錄。</div>`;
+}
+
+function adminAuditRow(log) {
+  const target = adminAuditTargetLabel(log);
+  return `
+    <article class="admin-feedback-item admin-audit-item">
+      <div class="admin-feedback-head">
+        <span>${escapeHtml(adminAuditActionLabel(log.action))} · ${dateTimeLabel(log.createdAt)}</span>
+        <strong>${escapeHtml(log.actor?.name || "管理員")}</strong>
+      </div>
+      <p>${escapeHtml(adminAuditDescription(log))}</p>
+      <dl>
+        <div><dt>目標</dt><dd>${escapeHtml(target)}</dd></div>
+        <div><dt>類型</dt><dd>${escapeHtml(adminAuditTargetTypeLabel(log.targetType))}</dd></div>
+        <div><dt>補充</dt><dd>${escapeHtml(adminAuditSupplement(log))}</dd></div>
+      </dl>
+    </article>
+  `;
+}
+
+function adminAuditDescription(log) {
+  const details = log.details || {};
+  const actor = log.actor?.name || "管理員";
+  const target = adminAuditTargetLabel(log);
+
+  if (log.action === "admin_role_update") {
+    return `${actor} 將 ${target} 從 ${adminRoleLabel(details.fromRole)} 改為 ${adminRoleLabel(details.toRole)}。`;
+  }
+  if (log.action === "admin_bootstrap") {
+    return `${target} 啟用管理員權限。`;
+  }
+  if (log.action === "hide_trade") {
+    return `${actor} 隱藏了交易 ${details.tradeId || log.targetId || "--"}。`;
+  }
+  if (log.action === "unhide_trade") {
+    return `${actor} 解除隱藏交易 ${details.tradeId || log.targetId || "--"}。`;
+  }
+  if (log.action === "hide_comment") {
+    return `${actor} 隱藏了留言 #${details.commentId || log.targetId || "--"}。`;
+  }
+  if (log.action === "unhide_comment") {
+    return `${actor} 解除隱藏留言 #${details.commentId || log.targetId || "--"}。`;
+  }
+  return `${actor} 更新了 ${target}。`;
+}
+
+function adminAuditTargetLabel(log) {
+  const details = log.details || {};
+  return log.targetUser?.name || details.name || details.email || log.targetId || "--";
+}
+
+function adminAuditActionLabel(action) {
+  return (
+    {
+      admin_bootstrap: "啟用管理員",
+      admin_role_update: "角色變更",
+      hide_trade: "隱藏交易",
+      unhide_trade: "解除隱藏交易",
+      hide_comment: "隱藏留言",
+      unhide_comment: "解除隱藏留言",
+    }[action] || "管理操作"
+  );
+}
+
+function adminAuditSupplement(log) {
+  const details = log.details || {};
+  return details.reason || details.email || details.tradeId || details.commentId || "--";
+}
+
+function adminAuditTargetTypeLabel(type) {
+  return (
+    {
+      user: "帳號",
+      trade: "交易",
+      comment: "留言",
+    }[type] || "--"
+  );
+}
+
+function adminRoleLabel(role) {
+  return role === "admin" ? "管理員" : "一般帳號";
 }
 
 function renderAdminModeration(app) {

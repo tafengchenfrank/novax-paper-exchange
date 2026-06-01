@@ -369,6 +369,10 @@ button {
   overflow: auto;
 }
 
+.admin-audit-list {
+  max-height: 24vh;
+}
+
 .admin-feedback-item {
   border: 1px solid var(--line);
   border-radius: 7px;

@@ -213,6 +213,22 @@ test("opens the back office for admin accounts", async ({ page, request }) => {
   await expect(page.locator("#adminDashboardSummary")).toContainText("待處理檢舉");
   await expect(page.locator("#adminUserList")).toContainText(adminEmail);
   await expect(page.locator("#adminAuditList")).toContainText("啟用管理員");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "匯出帳號" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^novax-users-\d{4}-\d{2}-\d{2}\.csv$/);
+  await expect(page.locator("#adminDashboardMessage")).toHaveText("CSV 已開始下載。");
+  await expect(page.locator("#adminAuditList")).toContainText("資料匯出");
+
+  const adminSessionToken = await page.evaluate(() => localStorage.getItem("novax-auth-token"));
+  for (const exportType of ["audit", "feedback", "reports"]) {
+    const exportResponse = await request.get(`/api/admin/export/${exportType}`, {
+      headers: { Authorization: `Bearer ${adminSessionToken}` },
+    });
+    expect(exportResponse.status()).toBe(200);
+    expect(exportResponse.headers()["content-type"]).toContain("text/csv");
+    expect(exportResponse.headers()["content-disposition"]).toContain(`novax-${exportType}-`);
+  }
 
   await page.locator("#adminUserSearch").fill(adminEmail);
   await expect(page.locator("#adminUserList")).toContainText("E2E Admin");

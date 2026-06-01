@@ -553,6 +553,23 @@ const statementSql = {
     ORDER BY feedback.created_at DESC, feedback.id DESC
     LIMIT 50
   `,
+  getFeedbackExport: `
+    SELECT
+      feedback.id,
+      feedback.category,
+      feedback.body,
+      feedback.contact,
+      feedback.page_path,
+      feedback.user_agent,
+      feedback.status,
+      feedback.created_at,
+      users.id AS user_id,
+      users.name AS user_name,
+      users.email AS user_email
+    FROM feedback
+    LEFT JOIN users ON users.id = feedback.user_id
+    ORDER BY feedback.created_at DESC, feedback.id DESC
+  `,
   getAdminSummary: `
     SELECT
       (SELECT COUNT(*) FROM users) AS users_count,
@@ -585,6 +602,28 @@ const statementSql = {
     ORDER BY users.created_at DESC, users.id DESC
     LIMIT 100
   `,
+  getAdminUsersExport: `
+    SELECT
+      users.id,
+      users.name,
+      users.email,
+      users.role,
+      users.status,
+      users.suspension_reason,
+      users.suspended_at,
+      users.created_at,
+      accounts.equity,
+      accounts.roi,
+      accounts.trades_count,
+      accounts.updated_at AS account_updated_at,
+      (SELECT COUNT(*) FROM follows WHERE follows.followed_id = users.id) AS followers_count,
+      (SELECT COUNT(*) FROM follows WHERE follows.follower_id = users.id) AS following_count,
+      (SELECT COUNT(*) FROM feedback WHERE feedback.user_id = users.id) AS feedback_count,
+      (SELECT COUNT(*) FROM content_reports WHERE content_reports.reporter_id = users.id) AS reports_made_count
+    FROM users
+    LEFT JOIN accounts ON accounts.user_id = users.id
+    ORDER BY users.created_at DESC, users.id DESC
+  `,
   getAdminCount: "SELECT COUNT(*) AS count FROM users WHERE role = 'admin'",
   getActiveAdminCount: "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND status = 'active'",
   createAdminAuditLog: `
@@ -611,6 +650,25 @@ const statementSql = {
     LEFT JOIN users target_user ON target_user.id = admin_audit_logs.target_user_id
     ORDER BY admin_audit_logs.created_at DESC, admin_audit_logs.id DESC
     LIMIT 50
+  `,
+  getAdminAuditLogsExport: `
+    SELECT
+      admin_audit_logs.id,
+      admin_audit_logs.actor_id,
+      admin_audit_logs.action,
+      admin_audit_logs.target_type,
+      admin_audit_logs.target_id,
+      admin_audit_logs.target_user_id,
+      admin_audit_logs.details,
+      admin_audit_logs.created_at,
+      actor.name AS actor_name,
+      actor.email AS actor_email,
+      target_user.name AS target_user_name,
+      target_user.email AS target_user_email
+    FROM admin_audit_logs
+    LEFT JOIN users actor ON actor.id = admin_audit_logs.actor_id
+    LEFT JOIN users target_user ON target_user.id = admin_audit_logs.target_user_id
+    ORDER BY admin_audit_logs.created_at DESC, admin_audit_logs.id DESC
   `,
   getHiddenTradeKeys: "SELECT owner_id, trade_id FROM hidden_public_trades",
   getHiddenComment: "SELECT comment_id FROM hidden_trade_comments WHERE comment_id = ?",
@@ -658,6 +716,29 @@ const statementSql = {
     LEFT JOIN users author ON author.id = trade_comments.author_id
     ORDER BY content_reports.created_at DESC, content_reports.id DESC
     LIMIT 50
+  `,
+  getContentReportsExport: `
+    SELECT
+      content_reports.id,
+      content_reports.target_type,
+      content_reports.owner_id,
+      content_reports.trade_id,
+      content_reports.comment_id,
+      content_reports.reason,
+      content_reports.details,
+      content_reports.status,
+      content_reports.created_at,
+      reporter.id AS reporter_id,
+      reporter.name AS reporter_name,
+      owner.name AS owner_name,
+      trade_comments.body AS comment_body,
+      author.name AS comment_author_name
+    FROM content_reports
+    JOIN users reporter ON reporter.id = content_reports.reporter_id
+    LEFT JOIN users owner ON owner.id = content_reports.owner_id
+    LEFT JOIN trade_comments ON trade_comments.id = content_reports.comment_id
+    LEFT JOIN users author ON author.id = trade_comments.author_id
+    ORDER BY content_reports.created_at DESC, content_reports.id DESC
   `,
   getHiddenTrades: `
     SELECT

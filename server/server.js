@@ -162,6 +162,21 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  const adminExportMatch = url.pathname.match(/^\/api\/admin\/export\/(users|audit|feedback|reports)$/);
+  if (request.method === "GET" && adminExportMatch) {
+    const adminContext = await getAdminContext(request, response);
+    if (!adminContext) return;
+
+    const exportType = adminExportMatch[1];
+    const payload = await buildAdminExport(exportType);
+    await createAdminAuditLog(adminContext, "admin_export", "export", exportType, null, {
+      exportType,
+      rows: payload.rows.length,
+    });
+    sendCsv(response, adminExportFilename(payload.name), payload.columns, payload.rows);
+    return;
+  }
+
   const adminUserRoleMatch = url.pathname.match(/^\/api\/admin\/users\/(\d+)\/role$/);
   if (request.method === "PATCH" && adminUserRoleMatch) {
     const adminContext = await getAdminContext(request, response);
@@ -940,6 +955,25 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function sendCsv(response, filename, columns, rows) {
+  const header = columns.map((column) => csvCell(column.header)).join(",");
+  const body = rows.map((row) => columns.map((column) => csvCell(column.value(row))).join(","));
+  const csv = `\uFEFF${[header, ...body].join("\r\n")}\r\n`;
+  response.writeHead(200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Cache-Control": "no-store",
+  });
+  response.end(csv);
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+  const needsQuote = /[",\r\n]/.test(text);
+  const escaped = text.replaceAll('"', '""');
+  return needsQuote ? `"${escaped}"` : escaped;
+}
+
 function rateLimitRequest(request, response, key, options) {
   const result = consumeRateLimit(key, options);
   if (result.allowed) return false;
@@ -1375,6 +1409,106 @@ function normalizeNotification(row) {
     readAt: row.read_at,
     createdAt: row.created_at,
   };
+}
+
+async function buildAdminExport(type) {
+  if (type === "users") {
+    return {
+      name: "users",
+      rows: await statements.getAdminUsersExport.all(),
+      columns: [
+        csvColumn("id", "id"),
+        csvColumn("name", "name"),
+        csvColumn("email", "email"),
+        csvColumn("role", "role"),
+        csvColumn("status", "status"),
+        csvColumn("suspension_reason", "suspension_reason"),
+        csvColumn("suspended_at", "suspended_at"),
+        csvColumn("created_at", "created_at"),
+        csvColumn("equity", "equity"),
+        csvColumn("roi", "roi"),
+        csvColumn("trades_count", "trades_count"),
+        csvColumn("account_updated_at", "account_updated_at"),
+        csvColumn("followers_count", "followers_count"),
+        csvColumn("following_count", "following_count"),
+        csvColumn("feedback_count", "feedback_count"),
+        csvColumn("reports_made_count", "reports_made_count"),
+      ],
+    };
+  }
+
+  if (type === "audit") {
+    return {
+      name: "audit",
+      rows: await statements.getAdminAuditLogsExport.all(),
+      columns: [
+        csvColumn("id", "id"),
+        csvColumn("created_at", "created_at"),
+        csvColumn("actor_id", "actor_id"),
+        csvColumn("actor_name", "actor_name"),
+        csvColumn("actor_email", "actor_email"),
+        csvColumn("action", "action"),
+        csvColumn("target_type", "target_type"),
+        csvColumn("target_id", "target_id"),
+        csvColumn("target_user_id", "target_user_id"),
+        csvColumn("target_user_name", "target_user_name"),
+        csvColumn("target_user_email", "target_user_email"),
+        csvColumn("details", "details"),
+      ],
+    };
+  }
+
+  if (type === "feedback") {
+    return {
+      name: "feedback",
+      rows: await statements.getFeedbackExport.all(),
+      columns: [
+        csvColumn("id", "id"),
+        csvColumn("created_at", "created_at"),
+        csvColumn("category", "category"),
+        csvColumn("status", "status"),
+        csvColumn("user_id", "user_id"),
+        csvColumn("user_name", "user_name"),
+        csvColumn("user_email", "user_email"),
+        csvColumn("contact", "contact"),
+        csvColumn("page_path", "page_path"),
+        csvColumn("body", "body"),
+        csvColumn("user_agent", "user_agent"),
+      ],
+    };
+  }
+
+  return {
+    name: "reports",
+    rows: await statements.getContentReportsExport.all(),
+    columns: [
+      csvColumn("id", "id"),
+      csvColumn("created_at", "created_at"),
+      csvColumn("target_type", "target_type"),
+      csvColumn("status", "status"),
+      csvColumn("reason", "reason"),
+      csvColumn("reporter_id", "reporter_id"),
+      csvColumn("reporter_name", "reporter_name"),
+      csvColumn("owner_id", "owner_id"),
+      csvColumn("owner_name", "owner_name"),
+      csvColumn("trade_id", "trade_id"),
+      csvColumn("comment_id", "comment_id"),
+      csvColumn("comment_author_name", "comment_author_name"),
+      csvColumn("details", "details"),
+      csvColumn("comment_body", "comment_body"),
+    ],
+  };
+}
+
+function csvColumn(header, key) {
+  return {
+    header,
+    value: (row) => row?.[key] ?? "",
+  };
+}
+
+function adminExportFilename(name) {
+  return `novax-${name}-${new Date().toISOString().slice(0, 10)}.csv`;
 }
 
 async function createNotification(recipientId, actorId, type, ownerId = null, tradeId = null, body = null) {

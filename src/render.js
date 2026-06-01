@@ -1190,8 +1190,13 @@ function renderFeedbackModals(app) {
   renderAdminFeedback(app);
 
   app.els.adminDashboardModal.classList.toggle("is-hidden", !app.adminDashboardOpen);
-  app.els.refreshAdminDashboard.disabled = app.adminDashboardBusy;
+  app.els.refreshAdminDashboard.disabled = app.adminDashboardBusy || app.adminExportBusy;
   app.els.refreshAdminDashboard.textContent = app.adminDashboardBusy ? "載入中..." : "刷新";
+  app.els.adminDashboardModal
+    .querySelectorAll("[data-admin-export]")
+    .forEach((button) => {
+      button.disabled = app.adminDashboardBusy || app.adminExportBusy;
+    });
   app.els.adminUserSearch.value = app.adminUserSearch || "";
   renderAdminDashboard(app);
 
@@ -1373,6 +1378,9 @@ function adminAuditDescription(log) {
   if (log.action === "user_unsuspend") {
     return `${actor} 解除 ${target} 的停權。`;
   }
+  if (log.action === "admin_export") {
+    return `${actor} 匯出了 ${adminExportLabel(details.exportType || log.targetId)} CSV。`;
+  }
   if (log.action === "hide_trade") {
     return `${actor} 隱藏了交易 ${details.tradeId || log.targetId || "--"}。`;
   }
@@ -1400,6 +1408,7 @@ function adminAuditActionLabel(action) {
       admin_role_update: "角色變更",
       user_suspend: "停權帳號",
       user_unsuspend: "解除停權",
+      admin_export: "資料匯出",
       hide_trade: "隱藏交易",
       unhide_trade: "解除隱藏交易",
       hide_comment: "隱藏留言",
@@ -1410,7 +1419,7 @@ function adminAuditActionLabel(action) {
 
 function adminAuditSupplement(log) {
   const details = log.details || {};
-  return details.reason || details.email || details.tradeId || details.commentId || "--";
+  return details.reason || details.email || details.tradeId || details.commentId || details.rows || "--";
 }
 
 function adminAuditTargetTypeLabel(type) {
@@ -1429,6 +1438,17 @@ function adminRoleLabel(role) {
 
 function accountStatusLabel(status) {
   return status === "suspended" ? "已停權" : "正常";
+}
+
+function adminExportLabel(type) {
+  return (
+    {
+      users: "帳號",
+      audit: "操作紀錄",
+      feedback: "回饋",
+      reports: "檢舉",
+    }[type] || "資料"
+  );
 }
 
 function renderAdminModeration(app) {

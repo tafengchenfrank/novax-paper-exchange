@@ -173,6 +173,25 @@ export async function updateAdminUserStatus(userId, status, reason = "") {
   });
 }
 
+export async function downloadAdminExport(type) {
+  const exportType = ["users", "audit", "feedback", "reports"].includes(type) ? type : "users";
+  const token = getToken();
+  const response = await fetch(`/api/admin/export/${encodeURIComponent(exportType)}`, {
+    headers: {
+      Accept: "text/csv",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || "匯出失敗，請稍後再試。");
+  }
+
+  const blob = await response.blob();
+  triggerDownload(blob, filenameFromDisposition(response.headers.get("content-disposition")) || `novax-${exportType}.csv`);
+}
+
 export async function reportContent({ targetType, ownerId, tradeId, commentId, reason, details }) {
   return request("/api/reports", {
     method: "POST",
@@ -221,6 +240,22 @@ export async function unhideModerationComment(adminToken, { commentId }) {
     body: { commentId },
     auth: adminToken ? false : true,
   });
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function filenameFromDisposition(value) {
+  const match = String(value || "").match(/filename="([^"]+)"/i);
+  return match?.[1] || "";
 }
 
 function buildAccountPayload(app) {

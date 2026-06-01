@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/novax-logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/novax-icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=33" />
-    <script type="module" src="app.js?v=33"></script>
+    <link rel="stylesheet" href="styles.css?v=34" />
+    <script type="module" src="app.js?v=34"></script>
   </head>
   <body>
     <div class="app-frame">
@@ -836,6 +836,12 @@
           <div class="admin-toolbar">
             <input id="adminUserSearch" type="search" placeholder="搜尋名稱或 email" autocomplete="off" />
             <button id="refreshAdminDashboard" class="tiny-action" type="button">刷新</button>
+          </div>
+          <div class="admin-export-actions">
+            <button class="tiny-action" type="button" data-admin-export="users">匯出帳號</button>
+            <button class="tiny-action" type="button" data-admin-export="audit">匯出操作</button>
+            <button class="tiny-action" type="button" data-admin-export="feedback">匯出回饋</button>
+            <button class="tiny-action" type="button" data-admin-export="reports">匯出檢舉</button>
           </div>
           <p id="adminDashboardMessage" class="auth-message" role="status"></p>
           <div id="adminUserList" class="admin-feedback-list"></div>

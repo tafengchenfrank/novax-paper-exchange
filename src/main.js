@@ -3,6 +3,7 @@ import {
   bootstrapAdmin,
   clearToken,
   commentOnPublicTrade,
+  downloadAdminExport,
   followUser,
   getFollowing,
   getFollowingFeed,
@@ -135,6 +136,7 @@ const app = {
   adminFeedbackSummary: null,
   adminDashboardOpen: false,
   adminDashboardBusy: false,
+  adminExportBusy: false,
   adminDashboardData: null,
   adminRoleBusyUserId: null,
   adminStatusBusyUserId: null,
@@ -597,6 +599,12 @@ function bindEvents(app) {
   app.els.adminDashboardModal.addEventListener("click", (event) => {
     if (event.target?.dataset?.adminDashboardClose !== undefined) {
       closeAdminDashboardModal(app);
+      return;
+    }
+
+    const exportButton = event.target?.closest?.("[data-admin-export]");
+    if (exportButton) {
+      downloadAdminExportFromDashboard(app, exportButton.dataset.adminExport);
     }
   });
   app.els.refreshAdminDashboard.addEventListener("click", () => loadAdminDashboard(app));
@@ -1064,6 +1072,7 @@ async function logout(app) {
   app.adminFeedbackRows = [];
   app.adminFeedbackSummary = null;
   app.adminDashboardOpen = false;
+  app.adminExportBusy = false;
   app.adminDashboardData = null;
   app.adminRoleBusyUserId = null;
   app.adminStatusBusyUserId = null;
@@ -1219,7 +1228,7 @@ function closeAdminDashboardModal(app) {
 }
 
 async function loadAdminDashboard(app) {
-  if (app.adminDashboardBusy) return;
+  if (app.adminDashboardBusy || app.adminExportBusy) return;
 
   app.adminDashboardBusy = true;
   setAdminDashboardMessage(app, "載入後臺資料中...");
@@ -1236,8 +1245,29 @@ async function loadAdminDashboard(app) {
   }
 }
 
+async function downloadAdminExportFromDashboard(app, exportType) {
+  if (app.adminExportBusy || app.adminDashboardBusy || !["users", "audit", "feedback", "reports"].includes(exportType)) {
+    return;
+  }
+
+  app.adminExportBusy = true;
+  setAdminDashboardMessage(app, "正在準備匯出檔案...");
+  renderAll(app);
+
+  try {
+    await downloadAdminExport(exportType);
+    app.adminDashboardData = await getAdminDashboard();
+    setAdminDashboardMessage(app, "CSV 已開始下載。", "ok");
+  } catch (error) {
+    setAdminDashboardMessage(app, error.message, "error");
+  } finally {
+    app.adminExportBusy = false;
+    renderAll(app);
+  }
+}
+
 async function updateAdminRoleFromDashboard(app, userId, role) {
-  if (app.adminDashboardBusy || app.adminRoleBusyUserId || app.adminStatusBusyUserId || !userId || !["admin", "user"].includes(role)) return;
+  if (app.adminDashboardBusy || app.adminExportBusy || app.adminRoleBusyUserId || app.adminStatusBusyUserId || !userId || !["admin", "user"].includes(role)) return;
 
   if (String(app.user?.id) === String(userId) && role === "user") {
     setAdminDashboardMessage(app, "不能撤銷自己的管理員權限。", "error");
@@ -1265,6 +1295,7 @@ async function updateAdminRoleFromDashboard(app, userId, role) {
 async function updateAdminStatusFromDashboard(app, userId, status) {
   if (
     app.adminDashboardBusy ||
+    app.adminExportBusy ||
     app.adminRoleBusyUserId ||
     app.adminStatusBusyUserId ||
     !userId ||

@@ -166,6 +166,13 @@ export async function updateAdminUserRole(userId, role) {
   });
 }
 
+export async function updateAdminUserStatus(userId, status, reason = "") {
+  return request(`/api/admin/users/${encodeURIComponent(userId)}/status`, {
+    method: "PATCH",
+    body: { status, reason },
+  });
+}
+
 export async function reportContent({ targetType, ownerId, tradeId, commentId, reason, details }) {
   return request("/api/reports", {
     method: "POST",

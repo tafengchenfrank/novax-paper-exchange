@@ -11,6 +11,9 @@ const sqliteSchema = `
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user',
+    status TEXT NOT NULL DEFAULT 'active',
+    suspension_reason TEXT,
+    suspended_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -156,6 +159,9 @@ const postgresSchema = `
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
+    suspension_reason TEXT,
+    suspended_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -278,21 +284,35 @@ const statementSql = {
   createUser: `
     INSERT INTO users (name, email, password_hash, salt)
     VALUES (?, ?, ?, ?)
-    RETURNING id, name, email, role, created_at
+    RETURNING id, name, email, role, status, suspension_reason, suspended_at, created_at
   `,
-  getUserByEmail: "SELECT id, name, email, role, password_hash, salt, created_at FROM users WHERE email = ?",
-  getUserById: "SELECT id, name, email, role, password_hash, salt, created_at FROM users WHERE id = ?",
+  getUserByEmail: `
+    SELECT id, name, email, role, status, suspension_reason, suspended_at, password_hash, salt, created_at
+    FROM users
+    WHERE email = ?
+  `,
+  getUserById: `
+    SELECT id, name, email, role, status, suspension_reason, suspended_at, password_hash, salt, created_at
+    FROM users
+    WHERE id = ?
+  `,
   updateUserProfile: `
     UPDATE users
     SET name = ?, email = ?
     WHERE id = ?
-    RETURNING id, name, email, role, created_at
+    RETURNING id, name, email, role, status, suspension_reason, suspended_at, created_at
   `,
   updateUserRole: `
     UPDATE users
     SET role = ?
     WHERE id = ?
-    RETURNING id, name, email, role, created_at
+    RETURNING id, name, email, role, status, suspension_reason, suspended_at, created_at
+  `,
+  updateUserStatus: `
+    UPDATE users
+    SET status = ?, suspension_reason = ?, suspended_at = ?
+    WHERE id = ?
+    RETURNING id, name, email, role, status, suspension_reason, suspended_at, created_at
   `,
   updateUserPassword: "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
   createSession: `
@@ -300,7 +320,16 @@ const statementSql = {
     VALUES (?, ?, ?)
   `,
   getSession: `
-    SELECT users.id, users.name, users.email, users.role, users.created_at, sessions.expires_at
+    SELECT
+      users.id,
+      users.name,
+      users.email,
+      users.role,
+      users.status,
+      users.suspension_reason,
+      users.suspended_at,
+      users.created_at,
+      sessions.expires_at
     FROM sessions
     JOIN users ON users.id = sessions.user_id
     WHERE sessions.token_hash = ?
@@ -322,6 +351,9 @@ const statementSql = {
       users.name,
       users.email,
       users.role,
+      users.status,
+      users.suspension_reason,
+      users.suspended_at,
       users.created_at
     FROM password_reset_tokens
     JOIN users ON users.id = password_reset_tokens.user_id
@@ -356,6 +388,7 @@ const statementSql = {
     SELECT users.id, users.name, accounts.equity, accounts.roi, accounts.trades_count, accounts.updated_at
     FROM accounts
     JOIN users ON users.id = accounts.user_id
+    WHERE users.status = 'active'
     ORDER BY accounts.roi DESC, accounts.equity DESC
     LIMIT 25
   `,
@@ -387,7 +420,7 @@ const statementSql = {
     FROM follows
     JOIN users ON users.id = follows.followed_id
     LEFT JOIN accounts ON accounts.user_id = users.id
-    WHERE follows.follower_id = ?
+    WHERE follows.follower_id = ? AND users.status = 'active'
     ORDER BY follows.created_at DESC
     LIMIT 10
   `,
@@ -404,7 +437,7 @@ const statementSql = {
     FROM follows
     JOIN users ON users.id = follows.followed_id
     JOIN accounts ON accounts.user_id = users.id
-    WHERE follows.follower_id = ?
+    WHERE follows.follower_id = ? AND users.status = 'active'
     ORDER BY accounts.updated_at DESC
     LIMIT 50
   `,
@@ -420,7 +453,7 @@ const statementSql = {
       accounts.updated_at
     FROM users
     LEFT JOIN accounts ON accounts.user_id = users.id
-    WHERE users.id = ?
+    WHERE users.id = ? AND users.status = 'active'
   `,
   likeTrade: {
     sqlite: `
@@ -524,6 +557,7 @@ const statementSql = {
     SELECT
       (SELECT COUNT(*) FROM users) AS users_count,
       (SELECT COUNT(*) FROM users WHERE role = 'admin') AS admin_users_count,
+      (SELECT COUNT(*) FROM users WHERE status = 'suspended') AS suspended_users_count,
       (SELECT COUNT(*) FROM accounts) AS synced_accounts_count,
       (SELECT COUNT(*) FROM feedback) AS feedback_count,
       (SELECT COUNT(*) FROM feedback WHERE status = 'new') AS new_feedback_count
@@ -534,6 +568,9 @@ const statementSql = {
       users.name,
       users.email,
       users.role,
+      users.status,
+      users.suspension_reason,
+      users.suspended_at,
       users.created_at,
       accounts.equity,
       accounts.roi,
@@ -549,6 +586,7 @@ const statementSql = {
     LIMIT 100
   `,
   getAdminCount: "SELECT COUNT(*) AS count FROM users WHERE role = 'admin'",
+  getActiveAdminCount: "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND status = 'active'",
   createAdminAuditLog: `
     INSERT INTO admin_audit_logs (actor_id, action, target_type, target_id, target_user_id, details)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -733,6 +771,16 @@ function migrateSqliteDatabase(raw) {
   if (!userColumns.some((column) => column.name === "role")) {
     raw.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
   }
+  if (!userColumns.some((column) => column.name === "status")) {
+    raw.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  }
+  if (!userColumns.some((column) => column.name === "suspension_reason")) {
+    raw.exec("ALTER TABLE users ADD COLUMN suspension_reason TEXT");
+  }
+  if (!userColumns.some((column) => column.name === "suspended_at")) {
+    raw.exec("ALTER TABLE users ADD COLUMN suspended_at TEXT");
+  }
+  raw.exec("UPDATE users SET status = 'active' WHERE status IS NULL OR status NOT IN ('active', 'suspended')");
 }
 
 async function migratePostgresDatabase(raw) {
@@ -748,6 +796,23 @@ async function migratePostgresDatabase(raw) {
           AND conrelid = 'users'::regclass
       ) THEN
         ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('user', 'admin'));
+      END IF;
+    END $$;
+  `);
+  await raw.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'");
+  await raw.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS suspension_reason TEXT");
+  await raw.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ");
+  await raw.query("UPDATE users SET status = 'active' WHERE status IS NULL OR status NOT IN ('active', 'suspended')");
+  await raw.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'users_status_check'
+          AND conrelid = 'users'::regclass
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (status IN ('active', 'suspended'));
       END IF;
     END $$;
   `);

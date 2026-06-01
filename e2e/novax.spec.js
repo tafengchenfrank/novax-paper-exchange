@@ -228,6 +228,38 @@ test("opens the back office for admin accounts", async ({ page, request }) => {
   await staffItem.getByRole("button", { name: "撤銷管理員" }).click();
   await expect(page.locator("#adminDashboardMessage")).toHaveText("管理員權限已更新。");
   await expect(staffItem).toContainText("一般帳號");
+  page.once("dialog", async (dialog) => {
+    await dialog.accept("E2E suspension");
+  });
+  await staffItem.getByRole("button", { name: "停權" }).click();
+  await expect(page.locator("#adminDashboardMessage")).toHaveText("帳號已停權。");
+  await expect(staffItem).toContainText("已停權");
+  await expect(staffItem).toContainText("E2E suspension");
+  await expect(page.locator("#adminAuditList")).toContainText("停權帳號");
+  const blockedLogin = await request.post("/api/auth/login", {
+    data: {
+      email: staffEmail,
+      password: "password123",
+    },
+  });
+  expect(blockedLogin.status()).toBe(403);
+  expect(await blockedLogin.json()).toEqual(
+    expect.objectContaining({
+      error: "ACCOUNT_SUSPENDED",
+    }),
+  );
+
+  await staffItem.getByRole("button", { name: "解除停權" }).click();
+  await expect(page.locator("#adminDashboardMessage")).toHaveText("帳號已解除停權。");
+  await expect(staffItem).toContainText("正常");
+  await expect(page.locator("#adminAuditList")).toContainText("解除停權");
+  const restoredLogin = await request.post("/api/auth/login", {
+    data: {
+      email: staffEmail,
+      password: "password123",
+    },
+  });
+  expect(restoredLogin.status()).toBe(200);
   await page.keyboard.press("Escape");
   await expect(page.locator("#adminDashboardModal")).toBeHidden();
 

@@ -310,7 +310,7 @@ button {
 
 .admin-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
@@ -433,6 +433,13 @@ button {
   border-color: rgba(22, 199, 132, 0.45);
   background:
     linear-gradient(90deg, rgba(22, 199, 132, 0.08), transparent 70%),
+    rgba(255, 255, 255, 0.022);
+}
+
+.admin-user-item.is-suspended {
+  border-color: rgba(255, 94, 91, 0.5);
+  background:
+    linear-gradient(90deg, rgba(255, 94, 91, 0.09), transparent 70%),
     rgba(255, 255, 255, 0.022);
 }
 
@@ -1204,6 +1211,11 @@ tr:last-child td {
 
 .tiny-action:hover {
   border-color: var(--red);
+  color: var(--red);
+}
+
+.tiny-action.is-danger {
+  border-color: rgba(255, 94, 91, 0.5);
   color: var(--red);
 }
 

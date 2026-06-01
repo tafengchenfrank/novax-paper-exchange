@@ -37,6 +37,7 @@ export async function requireUser(request) {
   await statements.deleteExpiredSessions.run();
   const row = await statements.getSession.get(hashToken(token));
   if (!row) return null;
+  if (userStatus(row) === "suspended") return null;
 
   return {
     token,
@@ -45,6 +46,7 @@ export async function requireUser(request) {
       name: row.name,
       email: row.email,
       role: userRole(row),
+      status: userStatus(row),
       createdAt: row.created_at,
     },
   };
@@ -52,4 +54,8 @@ export async function requireUser(request) {
 
 function userRole(row) {
   return row.role === "admin" ? "admin" : "user";
+}
+
+function userStatus(row) {
+  return row.status === "suspended" ? "suspended" : "active";
 }

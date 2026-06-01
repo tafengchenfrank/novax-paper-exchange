@@ -1246,6 +1246,7 @@ function renderAdminDashboard(app) {
         <div><span>註冊帳號</span><strong>${escapeHtml(summary.usersCount)}</strong></div>
         <div><span>已同步帳號</span><strong>${escapeHtml(summary.syncedAccountsCount)}</strong></div>
         <div><span>管理員帳號</span><strong>${escapeHtml(summary.adminAccountsCount)}</strong></div>
+        <div><span>停權帳號</span><strong>${escapeHtml(summary.suspendedAccountsCount || 0)}</strong></div>
         <div><span>待處理檢舉</span><strong>${escapeHtml(summary.openReportsCount)}</strong></div>
       `
     : "";
@@ -1270,24 +1271,34 @@ function filteredAdminUsers(app) {
   if (!query) return users;
 
   return users.filter((user) =>
-    `${user.name || ""} ${user.email || ""}`.toLowerCase().includes(query),
+    `${user.name || ""} ${user.email || ""} ${accountStatusLabel(user.status)} ${user.suspensionReason || ""}`
+      .toLowerCase()
+      .includes(query),
   );
 }
 
 function adminUserRow(app, user) {
   const isAdmin = user.role === "admin";
+  const isSuspended = user.status === "suspended";
   const nextRole = isAdmin ? "user" : "admin";
+  const nextStatus = isSuspended ? "active" : "suspended";
   const isSelf = String(user.id) === String(app.user?.id);
-  const isBusy = app.adminDashboardBusy || String(app.adminRoleBusyUserId || "") === String(user.id);
-  const disabled = isBusy || (isSelf && isAdmin);
+  const isBusy =
+    app.adminDashboardBusy ||
+    String(app.adminRoleBusyUserId || "") === String(user.id) ||
+    String(app.adminStatusBusyUserId || "") === String(user.id);
+  const roleDisabled = isBusy || isSuspended || (isSelf && isAdmin);
+  const statusDisabled = isBusy || isSelf;
   const actionLabel = isAdmin ? "撤銷管理員" : "設為管理員";
+  const statusActionLabel = isSuspended ? "解除停權" : "停權";
+  const reason = isSuspended && user.suspensionReason ? ` · 停權原因：${user.suspensionReason}` : "";
   return `
-    <article class="admin-feedback-item admin-user-item ${isAdmin ? "is-admin" : ""}">
+    <article class="admin-feedback-item admin-user-item ${isAdmin ? "is-admin" : ""} ${isSuspended ? "is-suspended" : ""}">
       <div class="admin-feedback-head">
-        <span>${escapeHtml(isAdmin ? "管理員" : "一般帳號")} · ${dateTimeLabel(user.createdAt)}</span>
+        <span>${escapeHtml(isAdmin ? "管理員" : "一般帳號")} · ${escapeHtml(accountStatusLabel(user.status))} · ${dateTimeLabel(user.createdAt)}</span>
         <strong>${escapeHtml(user.name || "使用者")}</strong>
       </div>
-      <p>${escapeHtml(user.email || "--")}</p>
+      <p>${escapeHtml(`${user.email || "--"}${reason}`)}</p>
       <dl>
         <div><dt>總權益</dt><dd>${formatNullableCurrency(user.equity)}</dd></div>
         <div><dt>ROI</dt><dd class="${toneClass(user.roi)}">${formatNullablePercent(user.roi)}</dd></div>
@@ -1302,9 +1313,18 @@ function adminUserRow(app, user) {
           type="button"
           data-admin-role-user="${escapeHtml(user.id)}"
           data-admin-role="${escapeHtml(nextRole)}"
-          ${disabled ? "disabled" : ""}
+          ${roleDisabled ? "disabled" : ""}
         >
           ${escapeHtml(isSelf && isAdmin ? "目前帳號" : actionLabel)}
+        </button>
+        <button
+          class="tiny-action ${isSuspended ? "" : "is-danger"}"
+          type="button"
+          data-admin-status-user="${escapeHtml(user.id)}"
+          data-admin-status="${escapeHtml(nextStatus)}"
+          ${statusDisabled ? "disabled" : ""}
+        >
+          ${escapeHtml(isSelf ? "目前帳號" : statusActionLabel)}
         </button>
       </div>
     </article>
@@ -1347,6 +1367,12 @@ function adminAuditDescription(log) {
   if (log.action === "admin_bootstrap") {
     return `${target} 啟用管理員權限。`;
   }
+  if (log.action === "user_suspend") {
+    return `${actor} 將 ${target} 停權。`;
+  }
+  if (log.action === "user_unsuspend") {
+    return `${actor} 解除 ${target} 的停權。`;
+  }
   if (log.action === "hide_trade") {
     return `${actor} 隱藏了交易 ${details.tradeId || log.targetId || "--"}。`;
   }
@@ -1372,6 +1398,8 @@ function adminAuditActionLabel(action) {
     {
       admin_bootstrap: "啟用管理員",
       admin_role_update: "角色變更",
+      user_suspend: "停權帳號",
+      user_unsuspend: "解除停權",
       hide_trade: "隱藏交易",
       unhide_trade: "解除隱藏交易",
       hide_comment: "隱藏留言",
@@ -1397,6 +1425,10 @@ function adminAuditTargetTypeLabel(type) {
 
 function adminRoleLabel(role) {
   return role === "admin" ? "管理員" : "一般帳號";
+}
+
+function accountStatusLabel(status) {
+  return status === "suspended" ? "已停權" : "正常";
 }
 
 function renderAdminModeration(app) {

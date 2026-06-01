@@ -33,6 +33,7 @@ import {
   unlikePublicTrade,
   updateProfile,
   updateAdminUserRole,
+  updateAdminUserStatus,
 } from "./api.js";
 import { formatChartPrice } from "./formatters.js";
 import { learningLessons } from "./learning.js";
@@ -136,6 +137,7 @@ const app = {
   adminDashboardBusy: false,
   adminDashboardData: null,
   adminRoleBusyUserId: null,
+  adminStatusBusyUserId: null,
   adminUserSearch: "",
   reportModalOpen: false,
   reportBusy: false,
@@ -603,9 +605,16 @@ function bindEvents(app) {
     renderAll(app);
   });
   app.els.adminUserList.addEventListener("click", (event) => {
-    const button = event.target?.closest?.("[data-admin-role-user]");
-    if (!button) return;
-    updateAdminRoleFromDashboard(app, button.dataset.adminRoleUser, button.dataset.adminRole);
+    const roleButton = event.target?.closest?.("[data-admin-role-user]");
+    if (roleButton) {
+      updateAdminRoleFromDashboard(app, roleButton.dataset.adminRoleUser, roleButton.dataset.adminRole);
+      return;
+    }
+
+    const statusButton = event.target?.closest?.("[data-admin-status-user]");
+    if (statusButton) {
+      updateAdminStatusFromDashboard(app, statusButton.dataset.adminStatusUser, statusButton.dataset.adminStatus);
+    }
   });
   app.els.closeReport.addEventListener("click", () => closeReportModal(app));
   app.els.reportModal.addEventListener("click", (event) => {
@@ -1057,6 +1066,7 @@ async function logout(app) {
   app.adminDashboardOpen = false;
   app.adminDashboardData = null;
   app.adminRoleBusyUserId = null;
+  app.adminStatusBusyUserId = null;
   app.adminUserSearch = "";
   app.adminModerationOpen = false;
   app.adminModerationData = null;
@@ -1227,7 +1237,7 @@ async function loadAdminDashboard(app) {
 }
 
 async function updateAdminRoleFromDashboard(app, userId, role) {
-  if (app.adminDashboardBusy || app.adminRoleBusyUserId || !userId || !["admin", "user"].includes(role)) return;
+  if (app.adminDashboardBusy || app.adminRoleBusyUserId || app.adminStatusBusyUserId || !userId || !["admin", "user"].includes(role)) return;
 
   if (String(app.user?.id) === String(userId) && role === "user") {
     setAdminDashboardMessage(app, "不能撤銷自己的管理員權限。", "error");
@@ -1248,6 +1258,45 @@ async function updateAdminRoleFromDashboard(app, userId, role) {
   } finally {
     app.adminDashboardBusy = false;
     app.adminRoleBusyUserId = null;
+    renderAll(app);
+  }
+}
+
+async function updateAdminStatusFromDashboard(app, userId, status) {
+  if (
+    app.adminDashboardBusy ||
+    app.adminRoleBusyUserId ||
+    app.adminStatusBusyUserId ||
+    !userId ||
+    !["active", "suspended"].includes(status)
+  ) {
+    return;
+  }
+
+  if (String(app.user?.id) === String(userId) && status === "suspended") {
+    setAdminDashboardMessage(app, "不能停權自己的帳號。", "error");
+    return;
+  }
+
+  const reason =
+    status === "suspended"
+      ? window.prompt("請輸入停權原因", "違反平台規範") || "違反平台規範"
+      : "";
+
+  app.adminDashboardBusy = true;
+  app.adminStatusBusyUserId = String(userId);
+  setAdminDashboardMessage(app, status === "suspended" ? "正在停權帳號..." : "正在解除停權...");
+  renderAll(app);
+
+  try {
+    await updateAdminUserStatus(userId, status, reason);
+    app.adminDashboardData = await getAdminDashboard();
+    setAdminDashboardMessage(app, status === "suspended" ? "帳號已停權。" : "帳號已解除停權。", "ok");
+  } catch (error) {
+    setAdminDashboardMessage(app, error.message, "error");
+  } finally {
+    app.adminDashboardBusy = false;
+    app.adminStatusBusyUserId = null;
     renderAll(app);
   }
 }

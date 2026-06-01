@@ -187,11 +187,18 @@ async function handleApi(request, response, url) {
     }
 
     if (target.role === "admin" && role === "user") {
-      const adminCount = await statements.getAdminCount.get();
+      const adminCount = userStatus(target) === "active"
+        ? await statements.getActiveAdminCount.get()
+        : await statements.getAdminCount.get();
       if (finiteNumber(adminCount?.count, 0) <= 1) {
         sendJson(response, 400, { error: "LAST_ADMIN", message: "至少需要保留一個管理員帳號。" });
         return;
       }
+    }
+
+    if (role === "admin" && userStatus(target) === "suspended") {
+      sendJson(response, 400, { error: "ACCOUNT_SUSPENDED", message: "請先解除停權，再設為管理員。" });
+      return;
     }
 
     const updated = target.role === role ? target : await statements.updateUserRole.get(role, target.id);
@@ -202,6 +209,73 @@ async function handleApi(request, response, url) {
         email: target.email,
         name: target.name,
       });
+    }
+
+    sendJson(response, 200, { user: normalizeUser(updated) });
+    return;
+  }
+
+  const adminUserStatusMatch = url.pathname.match(/^\/api\/admin\/users\/(\d+)\/status$/);
+  if (request.method === "PATCH" && adminUserStatusMatch) {
+    const adminContext = await getAdminContext(request, response);
+    if (!adminContext) return;
+
+    const targetId = Number(adminUserStatusMatch[1]);
+    const body = await readJson(request);
+    const status = cleanUserStatus(body.status);
+    const reason = cleanText(body.reason, 240);
+    if (!targetId || !status) {
+      sendJson(response, 400, { error: "INVALID_STATUS", message: "帳號狀態設定不正確。" });
+      return;
+    }
+
+    const target = await statements.getUserById.get(targetId);
+    if (!target) {
+      sendJson(response, 404, { error: "USER_NOT_FOUND", message: "找不到這個帳號。" });
+      return;
+    }
+
+    if (adminContext.session?.user.id === target.id && status === "suspended") {
+      sendJson(response, 400, { error: "SELF_SUSPEND", message: "不能停權自己的帳號。" });
+      return;
+    }
+
+    if (target.role === "admin" && userStatus(target) === "active" && status === "suspended") {
+      const activeAdminCount = await statements.getActiveAdminCount.get();
+      if (finiteNumber(activeAdminCount?.count, 0) <= 1) {
+        sendJson(response, 400, { error: "LAST_ADMIN", message: "至少需要保留一個可登入的管理員帳號。" });
+        return;
+      }
+    }
+
+    const nextReason = status === "suspended" ? reason || "違反平台規範" : null;
+    const suspendedAt = status === "suspended" ? new Date().toISOString() : null;
+    const changed =
+      userStatus(target) !== status ||
+      cleanText(target.suspension_reason, 240) !== cleanText(nextReason, 240);
+    const updated = changed
+      ? await statements.updateUserStatus.get(status, nextReason, suspendedAt, target.id)
+      : target;
+
+    if (status === "suspended") {
+      await statements.deleteUserSessions.run(target.id);
+    }
+
+    if (changed) {
+      await createAdminAuditLog(
+        adminContext,
+        status === "suspended" ? "user_suspend" : "user_unsuspend",
+        "user",
+        String(target.id),
+        target.id,
+        {
+          fromStatus: userStatus(target),
+          toStatus: userStatus(updated),
+          reason: nextReason || "",
+          email: target.email,
+          name: target.name,
+        },
+      );
     }
 
     sendJson(response, 200, { user: normalizeUser(updated) });
@@ -394,6 +468,11 @@ async function handleApi(request, response, url) {
       return;
     }
 
+    if (userStatus(user) === "suspended") {
+      sendJson(response, 403, { error: "ACCOUNT_SUSPENDED", message: "這個帳號已被停權，請聯絡管理員。" });
+      return;
+    }
+
     const session = await createSession(user.id);
     clearRateLimit(loginEmailKey);
     sendJson(response, 200, { user: normalizeUser(user), ...session });
@@ -474,6 +553,10 @@ async function handleApi(request, response, url) {
     const reset = await statements.getPasswordReset.get(hashToken(resetToken));
     if (!reset || reset.used_at || new Date(reset.expires_at).getTime() <= Date.now()) {
       sendJson(response, 400, { error: "RESET_EXPIRED", message: "重設連結已失效，請重新申請。" });
+      return;
+    }
+    if (userStatus(reset) === "suspended") {
+      sendJson(response, 403, { error: "ACCOUNT_SUSPENDED", message: "這個帳號已被停權，請聯絡管理員。" });
       return;
     }
 
@@ -759,7 +842,8 @@ async function handleApi(request, response, url) {
       return;
     }
 
-    if (!(await statements.getUserById.get(targetId))) {
+    const target = await statements.getUserById.get(targetId);
+    if (!target || userStatus(target) === "suspended") {
       sendJson(response, 404, { error: "USER_NOT_FOUND", message: "找不到這位使用者。" });
       return;
     }
@@ -981,6 +1065,11 @@ function cleanAdminRole(value) {
   return ["user", "admin"].includes(role) ? role : "";
 }
 
+function cleanUserStatus(value) {
+  const status = cleanText(value, 24);
+  return ["active", "suspended"].includes(status) ? status : "";
+}
+
 async function getAdminContext(request, response) {
   const adminToken = cleanText(request.headers["x-admin-token"], 200);
   const session = await requireUser(request);
@@ -1016,12 +1105,19 @@ function normalizeUser(user) {
     name: user.name,
     email: user.email,
     role: userRole(user),
+    status: userStatus(user),
+    suspensionReason: cleanText(user.suspension_reason, 240),
+    suspendedAt: user.suspended_at || null,
     createdAt: user.created_at,
   };
 }
 
 function userRole(user) {
   return user?.role === "admin" ? "admin" : "user";
+}
+
+function userStatus(user) {
+  return user?.status === "suspended" ? "suspended" : "active";
 }
 
 function normalizeFeedback(row) {
@@ -1048,6 +1144,7 @@ function normalizeAdminSummary(row) {
   return {
     usersCount: Math.max(0, Math.round(finiteNumber(row?.users_count, 0))),
     adminAccountsCount: Math.max(0, Math.round(finiteNumber(row?.admin_users_count, 0))),
+    suspendedAccountsCount: Math.max(0, Math.round(finiteNumber(row?.suspended_users_count, 0))),
     syncedAccountsCount: Math.max(0, Math.round(finiteNumber(row?.synced_accounts_count, 0))),
     feedbackCount: Math.max(0, Math.round(finiteNumber(row?.feedback_count, 0))),
     newFeedbackCount: Math.max(0, Math.round(finiteNumber(row?.new_feedback_count, 0))),
@@ -1060,6 +1157,9 @@ function normalizeAdminAccount(row) {
     name: cleanText(row.name, 32) || "使用者",
     email: cleanEmail(row.email),
     role: userRole(row),
+    status: userStatus(row),
+    suspensionReason: cleanText(row.suspension_reason, 240),
+    suspendedAt: row.suspended_at || null,
     createdAt: row.created_at,
     equity: nullableNumber(row.equity),
     roi: nullableNumber(row.roi),

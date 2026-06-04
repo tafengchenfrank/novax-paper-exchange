@@ -26,6 +26,18 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_HELO_NAME
+        sync: false
       - key: NOVAX_EMAIL_FROM
         sync: false
       - key: NOVAX_SUPPORT_EMAIL

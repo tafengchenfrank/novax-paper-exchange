@@ -58,7 +58,9 @@ NOVAX_PASSWORD_RESET_MINUTES=30
 `NODE_ENV`、`HOST`、`NOVAX_SESSION_DAYS`、`NOVAX_MAX_JSON_BYTES` 已經寫在 `render.yaml`。
 `NOVAX_ADMIN_TOKEN` 是管理員啟用金鑰，不要放進 GitHub。部署後先註冊或登入你要使用的帳號，打開「資料」視窗輸入 Admin Token，成功後帳號區會出現「後臺」。
 
-如果要讓「忘記密碼」真的寄出重設連結，另外設定 Resend：
+如果要讓「忘記密碼」真的寄出重設連結，可以設定 Resend 或 SMTP。
+
+Resend：
 
 ```text
 RESEND_API_KEY=你的 Resend API key
@@ -66,8 +68,22 @@ NOVAX_EMAIL_FROM=NovaX <noreply@你的寄信網域>
 NOVAX_SUPPORT_EMAIL=你的客服信箱
 ```
 
+SMTP：
+
+```text
+SMTP_HOST=你的 SMTP 主機
+SMTP_PORT=587
+SMTP_USER=你的 SMTP 帳號
+SMTP_PASS=你的 SMTP 密碼或 app password
+SMTP_SECURE=false
+NOVAX_EMAIL_FROM=NovaX <你的寄件信箱>
+NOVAX_SUPPORT_EMAIL=你的客服信箱
+```
+
+如果 SMTP 使用 465 port，通常把 `SMTP_SECURE` 改成 `true`。
+
 沒有設定寄信服務時，正式站會提示使用者聯絡管理者；本機開發才會顯示測試用重設連結。
-設定完成並重新部署後，打開 `/api/health`，看到 `"emailEnabled": true` 與 `"emailProvider": "resend"` 才代表正式寄信已啟用。
+設定完成並重新部署後，打開 `/api/health`，看到 `"emailEnabled": true` 與 `"emailProvider": "smtp"` 或 `"resend"` 才代表正式寄信已啟用。
 
 ## 5. 部署後檢查
 

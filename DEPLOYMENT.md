@@ -41,7 +41,9 @@ NOVAX_DATABASE_PATH=/var/lib/novax/novax.sqlite
 DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 ```
 
-忘記密碼功能使用 Resend 寄重設連結：
+忘記密碼功能可以用 Resend 或 SMTP 寄重設連結。
+
+Resend：
 
 ```bash
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
@@ -49,7 +51,19 @@ NOVAX_EMAIL_FROM="NovaX <noreply@your-domain.example>"
 NOVAX_SUPPORT_EMAIL=support@your-domain.example
 ```
 
-沒有設定 `RESEND_API_KEY` 與 `NOVAX_EMAIL_FROM` 時，production 不會寄出重設信；本機 development 會在畫面顯示測試用連結。設定後重新部署，確認 `/api/health` 顯示 `"emailEnabled": true` 與 `"emailProvider": "resend"`，再用正式站的「忘記密碼」寄一封測試信。
+SMTP：
+
+```bash
+SMTP_HOST=smtp.your-mail-provider.example
+SMTP_PORT=587
+SMTP_USER=your-account@example.com
+SMTP_PASS=your-smtp-password
+SMTP_SECURE=false
+NOVAX_EMAIL_FROM="NovaX <your-account@example.com>"
+NOVAX_SUPPORT_EMAIL=support@your-domain.example
+```
+
+`SMTP_PORT=587` 通常搭配 STARTTLS，所以 `SMTP_SECURE=false`；`SMTP_PORT=465` 通常搭配 SSL，所以 `SMTP_SECURE=true`。沒有設定寄信服務時，production 不會寄出重設信；本機 development 會在畫面顯示測試用連結。設定後重新部署，確認 `/api/health` 顯示 `"emailEnabled": true` 與 `"emailProvider": "smtp"` 或 `"resend"`，再用正式站的「忘記密碼」寄一封測試信。
 
 管理員權限會存在資料庫的帳號角色中，不會只靠 email 自動授權。先設定 `NOVAX_ADMIN_TOKEN`，再用要成為管理員的帳號登入，打開「資料」視窗並輸入 Admin Token。成功後帳號區會顯示「後臺」，可以查看所有帳號摘要、回饋與內容檢舉。
 

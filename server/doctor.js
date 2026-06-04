@@ -29,17 +29,32 @@ if (config.storage === "sqlite") {
 await check("HTTP bind", () => `${config.host}:${config.port}`);
 
 await check("Email delivery", () => {
-  const hasApiKey = Boolean(config.email.resendApiKey);
+  const hasResendApiKey = Boolean(config.email.resendApiKey);
   const hasSender = Boolean(config.email.from);
-  if (hasApiKey && hasSender) return `${config.email.provider} from ${config.email.from}`;
-  if (hasApiKey || hasSender) {
+  const hasSmtpHost = Boolean(config.email.smtp.host);
+  const hasSmtpUser = Boolean(config.email.smtp.user);
+  const hasSmtpPass = Boolean(config.email.smtp.pass);
+
+  if (config.email.enabled && config.email.provider === "smtp") {
+    return `smtp ${config.email.smtp.host}:${config.email.smtp.port} from ${config.email.from}`;
+  }
+  if (config.email.enabled && config.email.provider === "resend") {
+    return `resend from ${config.email.from}`;
+  }
+
+  if (hasResendApiKey || hasSmtpHost || hasSmtpUser || hasSmtpPass || hasSender) {
     const missing = [
-      !hasApiKey ? "RESEND_API_KEY" : "",
+      hasResendApiKey && !hasSender ? "NOVAX_EMAIL_FROM" : "",
+      hasSmtpHost && !hasSender ? "NOVAX_EMAIL_FROM" : "",
+      !hasSmtpHost && (hasSmtpUser || hasSmtpPass) ? "SMTP_HOST" : "",
+      hasSmtpUser && !hasSmtpPass ? "SMTP_PASS" : "",
+      !hasSmtpUser && hasSmtpPass ? "SMTP_USER" : "",
+      !hasResendApiKey && !hasSmtpHost ? "RESEND_API_KEY or SMTP_HOST" : "",
       !hasSender ? "NOVAX_EMAIL_FROM" : "",
     ].filter(Boolean);
-    throw new Error(`Incomplete email config. Missing ${missing.join(", ")}.`);
+    throw new Error(`Incomplete email config. Missing ${[...new Set(missing)].join(", ")}.`);
   }
-  return "disabled; set RESEND_API_KEY and NOVAX_EMAIL_FROM to enable password reset email";
+  return "disabled; set Resend or SMTP env vars to enable password reset email";
 });
 
 if (config.isProduction) {

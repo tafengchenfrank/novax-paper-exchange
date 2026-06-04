@@ -24,8 +24,16 @@ const adminToken = cleanText(process.env.NOVAX_ADMIN_TOKEN || "");
 const resendApiKey = cleanText(process.env.RESEND_API_KEY || "");
 const emailFrom = cleanText(process.env.NOVAX_EMAIL_FROM || "");
 const supportEmail = cleanText(process.env.NOVAX_SUPPORT_EMAIL || emailFrom);
+const smtpHost = cleanText(process.env.SMTP_HOST || "");
+const smtpPort = numberInRange(process.env.SMTP_PORT, 1, 65535, smtpHost ? 587 : 0);
+const smtpUser = cleanText(process.env.SMTP_USER || "");
+const smtpPass = cleanText(process.env.SMTP_PASS || "");
+const smtpSecure = parseBoolean(process.env.SMTP_SECURE, smtpPort === 465);
+const smtpHeloName = cleanText(process.env.SMTP_HELO_NAME || "novax.local");
 const passwordResetMinutes = numberInRange(process.env.NOVAX_PASSWORD_RESET_MINUTES, 5, 120, 30);
-const emailEnabled = Boolean(resendApiKey && emailFrom);
+const smtpAuthComplete = (!smtpUser && !smtpPass) || Boolean(smtpUser && smtpPass);
+const emailProvider = emailFrom && resendApiKey ? "resend" : emailFrom && smtpHost && smtpAuthComplete ? "smtp" : "";
+const emailEnabled = Boolean(emailProvider);
 
 export const config = {
   nodeEnv,
@@ -46,10 +54,18 @@ export const config = {
   passwordResetMinutes,
   email: {
     enabled: emailEnabled,
-    provider: emailEnabled ? "resend" : "",
+    provider: emailProvider,
     resendApiKey,
     from: emailFrom,
     supportEmail,
+    smtp: {
+      host: smtpHost,
+      port: smtpPort,
+      user: smtpUser,
+      pass: smtpPass,
+      secure: smtpSecure,
+      heloName: smtpHeloName,
+    },
   },
 };
 
@@ -111,6 +127,14 @@ function numberInRange(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.min(max, Math.max(min, Math.round(number)));
+}
+
+function parseBoolean(value, fallback = false) {
+  const normalized = cleanText(value).toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
 }
 
 function cleanText(value) {

@@ -28,6 +28,20 @@ if (config.storage === "sqlite") {
 
 await check("HTTP bind", () => `${config.host}:${config.port}`);
 
+await check("Email delivery", () => {
+  const hasApiKey = Boolean(config.email.resendApiKey);
+  const hasSender = Boolean(config.email.from);
+  if (hasApiKey && hasSender) return `${config.email.provider} from ${config.email.from}`;
+  if (hasApiKey || hasSender) {
+    const missing = [
+      !hasApiKey ? "RESEND_API_KEY" : "",
+      !hasSender ? "NOVAX_EMAIL_FROM" : "",
+    ].filter(Boolean);
+    throw new Error(`Incomplete email config. Missing ${missing.join(", ")}.`);
+  }
+  return "disabled; set RESEND_API_KEY and NOVAX_EMAIL_FROM to enable password reset email";
+});
+
 if (config.isProduction) {
   if (config.storage === "postgres") {
     await check("PostgreSQL URL", () => {

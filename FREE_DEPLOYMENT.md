@@ -67,6 +67,7 @@ NOVAX_SUPPORT_EMAIL=你的客服信箱
 ```
 
 沒有設定寄信服務時，正式站會提示使用者聯絡管理者；本機開發才會顯示測試用重設連結。
+設定完成並重新部署後，打開 `/api/health`，看到 `"emailEnabled": true` 與 `"emailProvider": "resend"` 才代表正式寄信已啟用。
 
 ## 5. 部署後檢查
 

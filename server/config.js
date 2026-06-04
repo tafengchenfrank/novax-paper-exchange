@@ -63,6 +63,7 @@ export function publicConfigSummary() {
     sessionDays: config.sessionDays,
     adminEnabled: Boolean(config.adminToken),
     emailEnabled: config.email.enabled,
+    emailProvider: config.email.provider,
   };
 }
 

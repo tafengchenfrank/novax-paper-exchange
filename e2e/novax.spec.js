@@ -179,6 +179,31 @@ test("registers, edits profile, and logs in with the updated password", async ({
   await expect(page.locator("#authUserName")).toHaveText("E2E Captain");
 });
 
+test("deletes an account and its associated cloud data", async ({ page, request }) => {
+  const suffix = Date.now().toString(36);
+  const email = `e2e-delete-${suffix}@novax.local`;
+
+  await gotoCleanApp(page);
+  await registerViaUi(page, {
+    name: "E2E Delete",
+    email,
+    password: "password123",
+  });
+
+  await page.locator("#openProfile").click();
+  await page.locator("#profileCurrentPassword").fill("password123");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator("#profileDelete").click();
+
+  await expect(page.locator("#authGuest")).toBeVisible();
+  await expect(page.locator("#authMessage")).toHaveText("帳號與雲端資料已永久刪除。");
+
+  const login = await request.post("/api/auth/login", {
+    data: { email, password: "password123" },
+  });
+  expect(login.status()).toBe(401);
+});
+
 test("opens the back office for admin accounts", async ({ page, request }) => {
   const suffix = Date.now().toString(36);
   const adminEmail = `e2e-admin-${suffix}@novax.local`;
@@ -472,6 +497,7 @@ test("places simulated orders and updates performance statistics", async ({ page
 
 async function gotoCleanApp(page) {
   await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-novax-ready", "true");
   await page.evaluate(async () => {
     localStorage.clear();
     if (!navigator.serviceWorker?.getRegistrations) return;
@@ -479,10 +505,12 @@ async function gotoCleanApp(page) {
     await Promise.all(registrations.map((registration) => registration.unregister()));
   });
   await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-novax-ready", "true");
 }
 
 async function registerViaUi(page, { name, email, password }) {
   await page.locator("#openAuth").click();
+  await expect(page.locator("#authModal")).toBeVisible();
   await ensureAuthMode(page, "register");
   await page.locator("#authName").fill(name);
   await page.locator("#authEmail").fill(email);
@@ -493,6 +521,7 @@ async function registerViaUi(page, { name, email, password }) {
 
 async function loginViaUi(page, { email, password }) {
   await page.locator("#openAuth").click();
+  await expect(page.locator("#authModal")).toBeVisible();
   await ensureAuthMode(page, "login");
   await page.locator("#authEmail").fill(email);
   await page.locator("#authPassword").fill(password);

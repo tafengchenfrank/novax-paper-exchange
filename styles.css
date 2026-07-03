@@ -526,6 +526,37 @@ button {
   color: var(--soft);
 }
 
+.auth-danger {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 8px;
+  border: 1px solid rgba(255, 94, 91, 0.55);
+  border-radius: 6px;
+  background: rgba(255, 94, 91, 0.08);
+  color: var(--red);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.account-danger-zone {
+  margin-top: 14px;
+  border-top: 1px solid rgba(255, 94, 91, 0.28);
+  padding-top: 12px;
+}
+
+.account-danger-zone strong {
+  color: var(--red);
+  font-size: 0.82rem;
+}
+
+.account-danger-zone p,
+.panel-note {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 .admin-bootstrap {
   margin-top: 12px;
   border-top: 1px solid var(--line);
@@ -1518,7 +1549,8 @@ tr:last-child td {
 }
 
 .tiny-action:disabled,
-.auth-submit:disabled {
+.auth-submit:disabled,
+.auth-danger:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }

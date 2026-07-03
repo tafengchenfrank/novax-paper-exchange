@@ -68,6 +68,15 @@ export async function updateProfile({ name, email, currentPassword, newPassword 
   });
 }
 
+export async function deleteRemoteAccount(currentPassword) {
+  const data = await request("/api/me", {
+    method: "DELETE",
+    body: { currentPassword },
+  });
+  clearToken();
+  return data;
+}
+
 export async function getRemoteAccount() {
   return request("/api/account");
 }

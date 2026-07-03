@@ -3,6 +3,7 @@ import {
   bootstrapAdmin,
   clearToken,
   commentOnPublicTrade,
+  deleteRemoteAccount,
   downloadAdminExport,
   followUser,
   getFollowing,
@@ -67,7 +68,7 @@ const legalDocuments = {
   privacy: {
     title: "隱私權政策",
     body: `
-      <p><strong>最後更新：2026-05-21</strong></p>
+      <p><strong>最後更新：2026-07-01</strong></p>
       <p>本政策說明 NovaX Beta 可能收集、使用與保存的資料類型。這是一份產品 Beta 用的基礎版本，正式商業化前應再由專業法務審閱。</p>
       <h3>1. 我們收集的資料</h3>
       <p>平台可能保存你的帳號名稱、email、密碼雜湊、登入 session、密碼重設 token、模擬資產快照、交易紀錄、學習進度、公開交易日誌、按讚、留言、追蹤關係與系統操作紀錄。</p>
@@ -78,7 +79,7 @@ const legalDocuments = {
       <h3>4. 資料分享</h3>
       <p>我們不會出售你的個人資料。公開交易日誌、留言、按讚與追蹤行為會依產品設計顯示給其他使用者。</p>
       <h3>5. 使用者選擇</h3>
-      <p>你可以不公開交易日誌，也可以登出帳號。若需要修改或刪除帳號資料，請透過平台管理者指定的 Beta 回報管道提出。</p>
+      <p>你可以不公開交易日誌，也可以登出帳號。你可在「資料」設定中輸入目前密碼，永久刪除帳號及平台保存的關聯資料。</p>
       <h3>6. 安全限制</h3>
       <p>平台會採取合理技術措施保護資料，例如密碼雜湊與環境變數保存密鑰；但網路服務無法保證絕對安全。</p>
     `,
@@ -125,6 +126,7 @@ const app = {
   resetPasswordToken: "",
   profileModalOpen: false,
   profileBusy: false,
+  accountDeleteBusy: false,
   adminBootstrapBusy: false,
   legalModalOpen: false,
   activeLegalDoc: "risk",
@@ -215,6 +217,7 @@ if (app.marketSource === "binance") {
   setFeedStatus(app, "simulated", "模擬行情");
 }
 renderAll(app);
+document.documentElement.dataset.novaxReady = "true";
 
 setInterval(() => {
   if (app.marketSource === "sim") {
@@ -529,6 +532,7 @@ function bindEvents(app) {
     }
   });
   app.els.profileSubmit.addEventListener("click", () => submitProfile(app));
+  app.els.profileDelete.addEventListener("click", () => submitAccountDeletion(app));
   app.els.adminBootstrapSubmit.addEventListener("click", () => submitAdminBootstrap(app));
   app.els.adminBootstrapToken.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -858,7 +862,7 @@ function openProfileModal(app) {
 }
 
 async function submitProfile(app) {
-  if (!app.user || app.profileBusy) return;
+  if (!app.user || app.profileBusy || app.accountDeleteBusy) return;
 
   const newPassword = app.els.profileNewPassword.value;
   const currentPassword = app.els.profileCurrentPassword.value;
@@ -890,8 +894,38 @@ async function submitProfile(app) {
   }
 }
 
+async function submitAccountDeletion(app) {
+  if (!app.user || app.accountDeleteBusy || app.profileBusy) return;
+
+  const currentPassword = app.els.profileCurrentPassword.value;
+  if (!currentPassword) {
+    setProfileMessage(app, "刪除帳號前請輸入目前密碼。", "error");
+    return;
+  }
+
+  const confirmed = window.confirm("確定永久刪除帳號與全部雲端資料嗎？這個動作無法復原。");
+  if (!confirmed) return;
+
+  app.accountDeleteBusy = true;
+  setProfileMessage(app, "正在刪除帳號...");
+  renderAll(app);
+
+  try {
+    await deleteRemoteAccount(currentPassword);
+    resetAccount(app);
+    clearSignedInState(app);
+    setAuthMessage(app, "帳號與雲端資料已永久刪除。", "ok");
+    await refreshLeaderboard(app);
+  } catch (error) {
+    setProfileMessage(app, error.message, "error");
+  } finally {
+    app.accountDeleteBusy = false;
+    renderAll(app);
+  }
+}
+
 async function submitAdminBootstrap(app) {
-  if (!app.user || app.adminBootstrapBusy) return;
+  if (!app.user || app.adminBootstrapBusy || app.accountDeleteBusy) return;
 
   const adminToken = app.els.adminBootstrapToken.value.trim();
   if (!adminToken) {
@@ -1059,7 +1093,16 @@ async function readNotifications(app) {
 }
 
 async function logout(app) {
-  await logoutAccount();
+  try {
+    await logoutAccount();
+  } finally {
+    clearSignedInState(app);
+    setAuthMessage(app, "已登出。");
+    renderAll(app);
+  }
+}
+
+function clearSignedInState(app) {
   app.user = null;
   app.authMode = "login";
   app.authModalOpen = false;
@@ -1090,8 +1133,6 @@ async function logout(app) {
   app.followingRows = [];
   app.notifications = [];
   app.unreadNotifications = 0;
-  setAuthMessage(app, "已登出。");
-  renderAll(app);
 }
 
 function closeAuthModal(app) {

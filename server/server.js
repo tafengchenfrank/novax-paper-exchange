@@ -1,11 +1,12 @@
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream } from "node:fs";
 import { createServer } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { extname, join, normalize } from "node:path";
+import { extname } from "node:path";
 import { createSession, hashPassword, hashToken, requireUser, verifyPassword } from "./auth.js";
 import { config, publicConfigSummary } from "./config.js";
 import { closeDatabase, statements } from "./db.js";
 import { sendPasswordResetEmail } from "./email.js";
+import { resolvePublicAsset } from "./static-files.js";
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -30,8 +31,11 @@ const rateLimitPresets = {
   adminBootstrapIp: { limit: 12, windowMs: 15 * minute },
   adminBootstrapUser: { limit: 6, windowMs: 15 * minute },
   adminTokenIp: { limit: 20, windowMs: 15 * minute },
+  deleteAccountIp: { limit: 10, windowMs: 60 * minute },
+  deleteAccountUser: { limit: 5, windowMs: 60 * minute },
 };
 const rateLimitBuckets = new Map();
+const maxRateLimitBuckets = 10_000;
 
 const server = createServer(async (request, response) => {
   try {
@@ -60,12 +64,35 @@ server.listen(config.port, config.host, () => {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
+let shutdownStarted = false;
+let shutdownFinished = false;
+
 function shutdown(signal) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
   process.stdout.write(`NovaX server received ${signal}, shutting down...\n`);
-  server.close(async () => {
-    await closeDatabase();
-    process.exit(0);
+  const forceTimer = setTimeout(() => {
+    server.closeAllConnections?.();
+    finishShutdown();
+  }, 3000);
+  forceTimer.unref();
+
+  server.close(() => {
+    clearTimeout(forceTimer);
+    finishShutdown();
   });
+  server.closeIdleConnections?.();
+}
+
+async function finishShutdown() {
+  if (shutdownFinished) return;
+  shutdownFinished = true;
+  try {
+    await closeDatabase();
+  } catch (error) {
+    console.error(error);
+  }
+  process.exit(0);
 }
 
 async function handleApi(request, response, url) {
@@ -655,6 +682,30 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === "DELETE" && url.pathname === "/api/me") {
+    if (rateLimitRequest(request, response, `delete-account:ip:${clientIp(request)}`, rateLimitPresets.deleteAccountIp)) return;
+
+    const session = await requireUser(request);
+    if (!session) {
+      sendJson(response, 401, { error: "UNAUTHENTICATED", message: "請先登入。" });
+      return;
+    }
+    if (rateLimitRequest(request, response, `delete-account:user:${session.user.id}`, rateLimitPresets.deleteAccountUser)) return;
+
+    const body = await readJson(request);
+    const currentPassword = String(body.currentPassword || "");
+    const fullUser = await statements.getUserById.get(session.user.id);
+    if (!fullUser || !currentPassword || !verifyPassword(currentPassword, fullUser.salt, fullUser.password_hash)) {
+      sendJson(response, 401, { error: "BAD_PASSWORD", message: "目前密碼不正確。" });
+      return;
+    }
+
+    await statements.deleteUser.run(session.user.id);
+    clearRateLimit(`delete-account:user:${session.user.id}`);
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/api/account") {
     const session = await requireUser(request);
     if (!session) {
@@ -897,16 +948,8 @@ async function handleApi(request, response, url) {
 }
 
 function serveStatic(url, response) {
-  let pathname = decodeURIComponent(url.pathname);
-  if (pathname === "/") pathname = "/index.html";
-
-  if (!isPublicAsset(pathname)) {
-    sendJson(response, 404, { error: "NOT_FOUND" });
-    return;
-  }
-
-  const target = normalize(join(config.rootDir, pathname));
-  if (!target.startsWith(config.rootDir) || !existsSync(target)) {
+  const target = resolvePublicAsset(config.rootDir, url.pathname);
+  if (!target) {
     sendJson(response, 404, { error: "NOT_FOUND" });
     return;
   }
@@ -916,17 +959,6 @@ function serveStatic(url, response) {
     "Cache-Control": target.endsWith("service-worker.js") ? "no-cache" : "public, max-age=300",
   });
   createReadStream(target).pipe(response);
-}
-
-function isPublicAsset(pathname) {
-  const publicFiles = new Set([
-    "/index.html",
-    "/styles.css",
-    "/app.js",
-    "/manifest.webmanifest",
-    "/service-worker.js",
-  ]);
-  return publicFiles.has(pathname) || pathname.startsWith("/assets/") || pathname.startsWith("/src/");
 }
 
 function readJson(request) {
@@ -1017,6 +1049,9 @@ function pruneRateLimitBuckets(now = Date.now()) {
       rateLimitBuckets.delete(key);
     }
   }
+  while (rateLimitBuckets.size > maxRateLimitBuckets) {
+    rateLimitBuckets.delete(rateLimitBuckets.keys().next().value);
+  }
 }
 
 function applySecurityHeaders(response) {
@@ -1024,6 +1059,10 @@ function applySecurityHeaders(response) {
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   response.setHeader("X-Frame-Options", "DENY");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://data-api.binance.vision wss://data-stream.binance.vision; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+  );
   if (config.isProduction) {
     response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
@@ -1073,10 +1112,14 @@ function requestOrigin(request) {
 }
 
 function clientIp(request) {
-  const forwarded = cleanText(request.headers["x-forwarded-for"], 240).split(",")[0].trim();
+  const forwardedChain = cleanText(request.headers["x-forwarded-for"], 240)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const forwarded = forwardedChain.at(-1) || "";
   const cloudflare = cleanText(request.headers["cf-connecting-ip"], 80);
   const socketAddress = cleanText(request.socket?.remoteAddress, 80);
-  return forwarded || cloudflare || socketAddress || "unknown";
+  return cloudflare || forwarded || socketAddress || "unknown";
 }
 
 function cleanFeedbackCategory(value) {

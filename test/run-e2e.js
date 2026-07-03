@@ -1,11 +1,15 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdtempSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const port = Number(process.env.NOVAX_E2E_PORT || 8791);
 const origin = `http://127.0.0.1:${port}`;
+const testDataDir = mkdtempSync(join(tmpdir(), "novax-e2e-"));
+const databasePath = join(testDataDir, "novax-e2e.sqlite");
 const server = spawn(process.execPath, ["server/server.js"], {
   cwd: rootDir,
   env: {
@@ -14,7 +18,8 @@ const server = spawn(process.execPath, ["server/server.js"], {
     HOST: "127.0.0.1",
     PORT: String(port),
     NOVAX_PUBLIC_ORIGIN: origin,
-    NOVAX_DATABASE_PATH: "./data/novax-e2e.sqlite",
+    NOVAX_DATA_DIR: testDataDir,
+    NOVAX_DATABASE_PATH: databasePath,
     NOVAX_ADMIN_TOKEN: "e2e-admin-token",
   },
   stdio: ["ignore", "inherit", "inherit"],
@@ -32,6 +37,8 @@ try {
         ...process.env,
         NOVAX_E2E_EXTERNAL: "1",
         NOVAX_E2E_PORT: String(port),
+        NOVAX_DATA_DIR: testDataDir,
+        NOVAX_DATABASE_PATH: databasePath,
       },
       stdio: "inherit",
     },
@@ -40,6 +47,7 @@ try {
   exitCode = code ?? 1;
 } finally {
   await stopServer(server);
+  rmSync(testDataDir, { recursive: true, force: true });
 }
 
 process.exit(exitCode);

@@ -58,6 +58,17 @@ NOVAX_PASSWORD_RESET_MINUTES=30
 `NODE_ENV`、`HOST`、`NOVAX_SESSION_DAYS`、`NOVAX_MAX_JSON_BYTES` 已經寫在 `render.yaml`。
 `NOVAX_ADMIN_TOKEN` 是管理員啟用金鑰，不要放進 GitHub。部署後先註冊或登入你要使用的帳號，打開「資料」視窗輸入 Admin Token，成功後帳號區會出現「後臺」。
 
+頁尾營運資訊可另外設定：
+
+```text
+NOVAX_OPERATOR_NAME=你的姓名、商號或公司名稱
+NOVAX_OPERATOR_TAX_ID=依法取得的統一編號
+NOVAX_OPERATOR_ADDRESS=營業聯絡地址
+NOVAX_SUPPORT_EMAIL=你的客服信箱
+```
+
+Free / Pro 金流設定請依 `MONETIZATION.md` 操作。未完成商戶審核前請保持金流變數空白，網站仍可正常作為免費 Beta 使用。
+
 如果要讓「忘記密碼」真的寄出重設連結，可以設定 Resend 或 SMTP。
 
 Resend：

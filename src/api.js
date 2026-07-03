@@ -11,14 +11,33 @@ export function clearToken() {
   localStorage.removeItem(tokenKey);
 }
 
-export async function registerAccount({ name, email, password }) {
+export async function getPublicConfig() {
+  return request("/api/public-config", { auth: false });
+}
+
+export async function registerAccount({ name, email, password, acceptedTerms, acceptedPrivacy }) {
   const data = await request("/api/auth/register", {
     method: "POST",
-    body: { name, email, password },
+    body: { name, email, password, acceptedTerms, acceptedPrivacy },
     auth: false,
   });
   localStorage.setItem(tokenKey, data.token);
   return data;
+}
+
+export async function getBillingStatus() {
+  return request("/api/billing/status");
+}
+
+export async function createBillingCheckout(consent) {
+  return request("/api/billing/checkout", {
+    method: "POST",
+    body: consent,
+  });
+}
+
+export async function getBillingPortal() {
+  return request("/api/billing/portal");
 }
 
 export async function loginAccount({ email, password }) {

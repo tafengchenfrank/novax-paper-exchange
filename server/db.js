@@ -36,6 +36,39 @@ const sqliteSchema = `
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id INTEGER PRIMARY KEY,
+    provider TEXT NOT NULL,
+    provider_subscription_id TEXT UNIQUE,
+    provider_customer_id TEXT,
+    plan TEXT NOT NULL DEFAULT 'free',
+    status TEXT NOT NULL DEFAULT 'none',
+    variant_id TEXT,
+    renews_at TEXT,
+    ends_at TEXT,
+    portal_url TEXT,
+    test_mode INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS billing_events (
+    id TEXT PRIMARY KEY,
+    event_name TEXT NOT NULL,
+    received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS legal_acceptances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    document TEXT NOT NULL,
+    version TEXT NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    accepted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS accounts (
     user_id INTEGER PRIMARY KEY,
     snapshot TEXT NOT NULL,
@@ -180,6 +213,37 @@ const postgresSchema = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMPTZ NOT NULL,
     used_at TIMESTAMPTZ
+  );
+
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    provider_subscription_id TEXT UNIQUE,
+    provider_customer_id TEXT,
+    plan TEXT NOT NULL DEFAULT 'free',
+    status TEXT NOT NULL DEFAULT 'none',
+    variant_id TEXT,
+    renews_at TIMESTAMPTZ,
+    ends_at TIMESTAMPTZ,
+    portal_url TEXT,
+    test_mode BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS billing_events (
+    id TEXT PRIMARY KEY,
+    event_name TEXT NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS legal_acceptances (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    document TEXT NOT NULL,
+    version TEXT NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    accepted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS accounts (
@@ -373,6 +437,45 @@ const statementSql = {
   deleteStalePasswordResets: `
     DELETE FROM password_reset_tokens
     WHERE used_at IS NOT NULL OR expires_at <= ?
+  `,
+  getSubscriptionByUser: `
+    SELECT user_id, provider, provider_subscription_id, provider_customer_id, plan, status,
+      variant_id, renews_at, ends_at, portal_url, test_mode, updated_at
+    FROM subscriptions
+    WHERE user_id = ?
+  `,
+  getSubscriptionByProviderId: `
+    SELECT user_id, provider, provider_subscription_id, provider_customer_id, plan, status,
+      variant_id, renews_at, ends_at, portal_url, test_mode, updated_at
+    FROM subscriptions
+    WHERE provider = ? AND provider_subscription_id = ?
+  `,
+  upsertSubscription: `
+    INSERT INTO subscriptions (
+      user_id, provider, provider_subscription_id, provider_customer_id, plan, status,
+      variant_id, renews_at, ends_at, portal_url, test_mode, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id) DO UPDATE SET
+      provider = excluded.provider,
+      provider_subscription_id = excluded.provider_subscription_id,
+      provider_customer_id = excluded.provider_customer_id,
+      plan = excluded.plan,
+      status = excluded.status,
+      variant_id = excluded.variant_id,
+      renews_at = excluded.renews_at,
+      ends_at = excluded.ends_at,
+      portal_url = excluded.portal_url,
+      test_mode = excluded.test_mode,
+      updated_at = CURRENT_TIMESTAMP
+  `,
+  getBillingEvent: "SELECT id, event_name, received_at FROM billing_events WHERE id = ?",
+  recordBillingEvent: {
+    sqlite: "INSERT OR IGNORE INTO billing_events (id, event_name) VALUES (?, ?)",
+    postgres: "INSERT INTO billing_events (id, event_name) VALUES (?, ?) ON CONFLICT DO NOTHING",
+  },
+  recordLegalAcceptance: `
+    INSERT INTO legal_acceptances (user_id, document, version, ip_address, user_agent)
+    VALUES (?, ?, ?, ?, ?)
   `,
   upsertAccount: `
     INSERT INTO accounts (user_id, snapshot, equity, roi, trades_count, updated_at)

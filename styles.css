@@ -276,6 +276,126 @@ button {
   width: min(720px, 100%);
 }
 
+.pricing-card {
+  width: min(760px, 100%);
+}
+
+.plan-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  margin-top: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 0 7px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.plan-badge.is-pro {
+  border-color: rgba(243, 181, 70, 0.52);
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pricing-plan {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 14px;
+}
+
+.pricing-plan.is-featured {
+  border-color: rgba(243, 181, 70, 0.48);
+  background: linear-gradient(180deg, var(--amber-soft), rgba(255, 255, 255, 0.02));
+}
+
+.pricing-plan > span,
+.pricing-plan > strong {
+  display: block;
+}
+
+.pricing-plan > span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.pricing-plan > strong {
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 1.12rem;
+}
+
+.pricing-plan ul {
+  margin: 12px 0 0;
+  color: var(--soft);
+  padding-left: 20px;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.billing-current-plan {
+  margin: 12px 0 0;
+  color: var(--cyan);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.legal-consent {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.018);
+  padding: 10px;
+}
+
+.legal-consent label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--soft);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.legal-consent input {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: var(--green);
+}
+
+.legal-consent button {
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
+  padding: 0 3px;
+  text-decoration: underline;
+}
+
+.performance-stat.is-pro-locked {
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.performance-stat.is-pro-locked strong {
+  color: var(--amber);
+  letter-spacing: 0.06em;
+}
+
 .feedback-card {
   width: min(520px, 100%);
 }
@@ -2380,6 +2500,10 @@ tr:last-child td {
 }
 
 @media (max-width: 520px) {
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
   .asset-profile-line {
     align-items: flex-start;
     flex-direction: column;

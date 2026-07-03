@@ -31,6 +31,20 @@ const smtpPass = cleanText(process.env.SMTP_PASS || "");
 const smtpSecure = parseBoolean(process.env.SMTP_SECURE, smtpPort === 465);
 const smtpHeloName = cleanText(process.env.SMTP_HELO_NAME || "novax.local");
 const passwordResetMinutes = numberInRange(process.env.NOVAX_PASSWORD_RESET_MINUTES, 5, 120, 30);
+const operatorName = cleanText(process.env.NOVAX_OPERATOR_NAME || "NovaX Paper Exchange");
+const operatorTaxId = cleanText(process.env.NOVAX_OPERATOR_TAX_ID || "");
+const operatorAddress = cleanText(process.env.NOVAX_OPERATOR_ADDRESS || "");
+const termsEffectiveDate = cleanText(process.env.NOVAX_TERMS_EFFECTIVE_DATE || "2026-07-03");
+const billingProvider = cleanText(process.env.NOVAX_BILLING_PROVIDER || "").toLowerCase();
+const billingCheckoutUrl = cleanText(process.env.LEMONSQUEEZY_CHECKOUT_URL || "");
+const billingPortalUrl = cleanText(process.env.LEMONSQUEEZY_PORTAL_URL || "");
+const billingProVariantId = cleanText(process.env.LEMONSQUEEZY_PRO_VARIANT_ID || "");
+const billingWebhookSecret = cleanText(process.env.LEMONSQUEEZY_WEBHOOK_SECRET || "");
+const billingLinkSecret = cleanText(process.env.NOVAX_BILLING_LINK_SECRET || "");
+const billingPriceLabel = cleanText(process.env.NOVAX_PRO_PRICE_LABEL || "US$9 / 月");
+const billingAllowTestMode = parseBoolean(process.env.NOVAX_BILLING_ALLOW_TEST_MODE, !isProduction);
+const billingEnabled = billingProvider === "lemonsqueezy"
+  && Boolean(billingCheckoutUrl && billingProVariantId && billingWebhookSecret && billingLinkSecret);
 const smtpAuthComplete = (!smtpUser && !smtpPass) || Boolean(smtpUser && smtpPass);
 const emailProvider = emailFrom && resendApiKey ? "resend" : emailFrom && smtpHost && smtpAuthComplete ? "smtp" : "";
 const emailEnabled = Boolean(emailProvider);
@@ -52,6 +66,25 @@ export const config = {
   corsOrigins,
   adminToken,
   passwordResetMinutes,
+  operator: {
+    name: operatorName,
+    taxId: operatorTaxId,
+    address: operatorAddress,
+    supportEmail,
+  },
+  termsEffectiveDate,
+  billing: {
+    enabled: billingEnabled,
+    requestedProvider: billingProvider,
+    provider: billingEnabled ? billingProvider : "",
+    checkoutUrl: billingCheckoutUrl,
+    portalUrl: billingPortalUrl,
+    proVariantId: billingProVariantId,
+    webhookSecret: billingWebhookSecret,
+    linkSecret: billingLinkSecret,
+    priceLabel: billingPriceLabel,
+    allowTestMode: billingAllowTestMode,
+  },
   email: {
     enabled: emailEnabled,
     provider: emailProvider,
@@ -80,6 +113,21 @@ export function publicConfigSummary() {
     adminEnabled: Boolean(config.adminToken),
     emailEnabled: config.email.enabled,
     emailProvider: config.email.provider,
+    billingEnabled: config.billing.enabled,
+  };
+}
+
+export function publicAppConfig() {
+  return {
+    operator: config.operator,
+    termsEffectiveDate: config.termsEffectiveDate,
+    emailEnabled: config.email.enabled,
+    billing: {
+      enabled: config.billing.enabled,
+      provider: config.billing.provider,
+      priceLabel: config.billing.priceLabel,
+      portalUrl: config.billing.portalUrl,
+    },
   };
 }
 

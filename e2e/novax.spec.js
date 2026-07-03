@@ -95,6 +95,26 @@ test("uses the mobile bottom navigation", async ({ page }) => {
   await expect(page.locator("#authModal")).toBeVisible();
 });
 
+test("shows safe billing defaults and requires registration consent", async ({ page }) => {
+  await gotoCleanApp(page);
+
+  await page.locator("#openPricing").click();
+  await expect(page.locator("#pricingModal")).toBeVisible();
+  await expect(page.locator("#proPriceLabel")).toHaveText("Beta 期間免費開放");
+  await expect(page.locator("#billingCheckout")).toBeDisabled();
+  await expect(page.locator("#billingCheckout")).toHaveText("付費方案尚未開放");
+  await page.locator("#closePricing").click();
+
+  await page.locator("#openAuth").click();
+  await ensureAuthMode(page, "register");
+  await expect(page.locator("#authLegalConsent")).toBeVisible();
+  await page.locator("#authName").fill("Consent Tester");
+  await page.locator("#authEmail").fill(`consent-${Date.now()}@novax.local`);
+  await page.locator("#authPassword").fill("password123");
+  await page.locator("#authSubmit").click();
+  await expect(page.locator("#authMessage")).toHaveText("請先閱讀並同意使用條款與隱私權政策。");
+});
+
 test("rate limits repeated login failures", async ({ request }) => {
   const email = `e2e-rate-${Date.now().toString(36)}@novax.local`;
 
@@ -228,6 +248,8 @@ test("opens the back office for admin accounts", async ({ page, request }) => {
       name: "E2E Staff",
       email: staffEmail,
       password: "password123",
+      acceptedTerms: true,
+      acceptedPrivacy: true,
     },
   });
   expect(staffResponse.status()).toBe(201);
@@ -515,6 +537,8 @@ async function registerViaUi(page, { name, email, password }) {
   await page.locator("#authName").fill(name);
   await page.locator("#authEmail").fill(email);
   await page.locator("#authPassword").fill(password);
+  await page.locator("#authAcceptTerms").check();
+  await page.locator("#authAcceptPrivacy").check();
   await page.locator("#authSubmit").click();
   await expect(page.locator("#authSignedIn")).toBeVisible();
 }

@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/novax-logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/novax-icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=36" />
-    <script type="module" src="app.js?v=36"></script>
+    <link rel="stylesheet" href="styles.css?v=37" />
+    <script type="module" src="app.js?v=37"></script>
   </head>
   <body>
     <div class="app-frame">
@@ -61,6 +61,7 @@
             <div>
               <span>帳號</span>
               <strong id="authUserName">--</strong>
+              <small id="accountPlanBadge" class="plan-badge">FREE</small>
             </div>
             <div class="account-actions">
               <button id="openAdminDashboard" class="tiny-action is-hidden" type="button">後臺</button>
@@ -276,15 +277,15 @@
                 <span>交易次數</span>
                 <strong id="performanceTrades">--</strong>
               </div>
-              <div class="asset-stat performance-stat">
+              <div class="asset-stat performance-stat" data-pro-feature>
                 <span>最大回撤</span>
                 <strong id="performanceDrawdown">--</strong>
               </div>
-              <div class="asset-stat performance-stat">
+              <div class="asset-stat performance-stat" data-pro-feature>
                 <span>平均損益</span>
                 <strong id="performanceAveragePnl">--</strong>
               </div>
-              <div class="asset-stat performance-stat">
+              <div class="asset-stat performance-stat" data-pro-feature>
                 <span>獲利因子</span>
                 <strong id="performanceProfitFactor">--</strong>
               </div>
@@ -458,13 +459,15 @@
       </main>
 
       <footer class="legal-footer" aria-label="法律與政策">
-        <span>NovaX Paper Exchange · Beta</span>
+        <span id="operatorDisclosure">NovaX Paper Exchange · Beta</span>
         <div>
+          <button id="openPricing" type="button">方案</button>
           <button type="button" data-feedback-open>回饋</button>
           <button type="button" data-admin-feedback-open>管理回饋</button>
           <button type="button" data-admin-moderation-open>內容管理</button>
           <button type="button" data-legal-doc="terms">使用條款</button>
           <button type="button" data-legal-doc="privacy">隱私權政策</button>
+          <button type="button" data-legal-doc="refund">退款政策</button>
           <button type="button" data-legal-doc="risk">風險聲明</button>
         </div>
       </footer>
@@ -515,10 +518,73 @@
             <span>密碼</span>
             <input id="authPassword" type="password" autocomplete="current-password" />
           </label>
+          <div id="authLegalConsent" class="legal-consent is-hidden">
+            <label>
+              <input id="authAcceptTerms" type="checkbox" />
+              <span>我已閱讀並同意<button type="button" data-legal-doc="terms">使用條款</button></span>
+            </label>
+            <label>
+              <input id="authAcceptPrivacy" type="checkbox" />
+              <span>我已閱讀並同意<button type="button" data-legal-doc="privacy">隱私權政策</button></span>
+            </label>
+          </div>
           <button id="authSubmit" class="auth-submit" type="button">登入</button>
           <button id="authModeToggle" class="auth-secondary" type="button">建立新帳號</button>
           <button id="authForgotPassword" class="auth-link-button" type="button">忘記密碼？</button>
           <p id="authMessage" class="auth-message" role="status"></p>
+        </section>
+      </div>
+
+      <div id="pricingModal" class="auth-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="pricingTitle">
+        <button class="auth-backdrop" type="button" data-pricing-close aria-label="關閉方案視窗"></button>
+        <section class="auth-card pricing-card">
+          <div class="auth-head">
+            <div>
+              <span>Plans & Billing</span>
+              <strong id="pricingTitle">選擇方案</strong>
+            </div>
+            <button id="closePricing" class="icon-button" type="button" aria-label="關閉方案視窗">X</button>
+          </div>
+
+          <p id="billingCurrentPlan" class="billing-current-plan">目前方案：免費版</p>
+          <div class="pricing-grid">
+            <article class="pricing-plan">
+              <span>Free</span>
+              <strong>免費</strong>
+              <ul>
+                <li>完整模擬下單</li>
+                <li>交易日誌與學習任務</li>
+                <li>雲端進度與社群功能</li>
+              </ul>
+            </article>
+            <article class="pricing-plan is-featured">
+              <span>Pro</span>
+              <strong id="proPriceLabel">即將推出</strong>
+              <ul>
+                <li>免費版全部功能</li>
+                <li>最大回撤、平均損益與獲利因子</li>
+                <li>後續進階分析功能</li>
+              </ul>
+            </article>
+          </div>
+
+          <div id="billingConsent" class="legal-consent billing-consent">
+            <label>
+              <input id="billingAcceptTerms" type="checkbox" />
+              <span>我同意<button type="button" data-legal-doc="terms">使用條款</button>與<button type="button" data-legal-doc="privacy">隱私權政策</button></span>
+            </label>
+            <label>
+              <input id="billingAcceptRecurring" type="checkbox" />
+              <span>我了解價格、週期及自動續訂，並可於下次扣款前取消</span>
+            </label>
+            <label>
+              <input id="billingAcceptRefund" type="checkbox" />
+              <span>我已閱讀<button type="button" data-legal-doc="refund">退款政策</button>，並同意付款後立即提供數位服務</span>
+            </label>
+          </div>
+          <button id="billingCheckout" class="auth-submit" type="button">升級 Pro</button>
+          <button id="billingPortal" class="auth-secondary is-hidden" type="button">管理訂閱／取消續訂</button>
+          <p id="billingMessage" class="auth-message" role="status"></p>
         </section>
       </div>
 
@@ -616,7 +682,7 @@
           </div>
           <div class="account-danger-zone">
             <strong>刪除帳號與雲端資料</strong>
-            <p>請先在上方輸入目前密碼。刪除後無法復原，公開交易、留言與追蹤資料也會一併移除。</p>
+            <p>請先在上方輸入目前密碼。有付費訂閱時須先到「方案」取消續訂。刪除後無法復原，公開交易、留言與追蹤資料也會一併移除。</p>
             <button id="profileDelete" class="auth-danger" type="button">永久刪除帳號</button>
           </div>
           <p id="profileMessage" class="auth-message" role="status"></p>

@@ -3,7 +3,14 @@ import { createServer } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { extname } from "node:path";
 import { createSession, hashPassword, hashToken, requireUser, verifyPassword } from "./auth.js";
-import { config, publicConfigSummary } from "./config.js";
+import {
+  BillingError,
+  billingPortalUrlForUser,
+  billingStatusForUser,
+  createBillingCheckoutUrl,
+  processLemonSqueezyWebhook,
+} from "./billing.js";
+import { config, publicAppConfig, publicConfigSummary } from "./config.js";
 import { closeDatabase, statements } from "./db.js";
 import { sendPasswordResetEmail } from "./email.js";
 import { resolvePublicAsset } from "./static-files.js";
@@ -33,6 +40,8 @@ const rateLimitPresets = {
   adminTokenIp: { limit: 20, windowMs: 15 * minute },
   deleteAccountIp: { limit: 10, windowMs: 60 * minute },
   deleteAccountUser: { limit: 5, windowMs: 60 * minute },
+  billingCheckoutIp: { limit: 10, windowMs: 60 * minute },
+  billingCheckoutUser: { limit: 6, windowMs: 60 * minute },
 };
 const rateLimitBuckets = new Map();
 const maxRateLimitBuckets = 10_000;
@@ -103,6 +112,94 @@ async function handleApi(request, response, url) {
       uptime: Math.round(process.uptime()),
       config: publicConfigSummary(),
     });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/public-config") {
+    sendJson(response, 200, publicAppConfig());
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/billing/webhooks/lemonsqueezy") {
+    try {
+      const rawBody = await readRawBody(request);
+      const result = await processLemonSqueezyWebhook(rawBody, request.headers["x-signature"]);
+      sendJson(response, 200, { ok: true, ...result });
+    } catch (error) {
+      if (error instanceof BillingError) {
+        sendJson(response, error.statusCode, { error: error.code, message: error.message });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/billing/status") {
+    const session = await requireUser(request);
+    if (!session) {
+      sendJson(response, 401, { error: "UNAUTHENTICATED", message: "請先登入。" });
+      return;
+    }
+    response.setHeader("Cache-Control", "no-store");
+    sendJson(response, 200, {
+      billing: publicAppConfig().billing,
+      subscription: await billingStatusForUser(session.user.id),
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/billing/checkout") {
+    const session = await requireUser(request);
+    if (!session) {
+      sendJson(response, 401, { error: "UNAUTHENTICATED", message: "請先登入後再升級方案。" });
+      return;
+    }
+    if (rateLimitRequest(request, response, `billing:checkout:ip:${clientIp(request)}`, rateLimitPresets.billingCheckoutIp)) return;
+    if (rateLimitRequest(request, response, `billing:checkout:user:${session.user.id}`, rateLimitPresets.billingCheckoutUser)) return;
+
+    const body = await readJson(request);
+    if (body.acceptedTerms !== true || body.acceptedPrivacy !== true || body.acceptedRecurring !== true) {
+      sendJson(response, 400, {
+        error: "BILLING_CONSENT_REQUIRED",
+        message: "請先閱讀並同意使用條款、隱私權政策與自動續訂說明。",
+      });
+      return;
+    }
+
+    try {
+      const checkoutUrl = createBillingCheckoutUrl(session.user);
+      const ipAddress = cleanText(clientIp(request), 80) || null;
+      const userAgent = cleanText(request.headers["user-agent"], 220) || null;
+      await statements.recordLegalAcceptance.run(session.user.id, "terms", config.termsEffectiveDate, ipAddress, userAgent);
+      await statements.recordLegalAcceptance.run(session.user.id, "privacy", config.termsEffectiveDate, ipAddress, userAgent);
+      await statements.recordLegalAcceptance.run(session.user.id, "recurring-billing", config.termsEffectiveDate, ipAddress, userAgent);
+      clearRateLimit(`billing:checkout:user:${session.user.id}`);
+      response.setHeader("Cache-Control", "no-store");
+      sendJson(response, 200, { checkoutUrl });
+    } catch (error) {
+      if (error instanceof BillingError) {
+        sendJson(response, error.statusCode, { error: error.code, message: error.message });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/billing/portal") {
+    const session = await requireUser(request);
+    if (!session) {
+      sendJson(response, 401, { error: "UNAUTHENTICATED", message: "請先登入。" });
+      return;
+    }
+    const portalUrl = await billingPortalUrlForUser(session.user.id);
+    if (!portalUrl) {
+      sendJson(response, 404, { error: "PORTAL_UNAVAILABLE", message: "目前沒有可管理的訂閱。" });
+      return;
+    }
+    response.setHeader("Cache-Control", "no-store");
+    sendJson(response, 200, { portalUrl });
     return;
   }
 
@@ -479,6 +576,13 @@ async function handleApi(request, response, url) {
       sendJson(response, 400, { error: "INVALID_INPUT", message: "請輸入名稱、email，密碼至少 8 碼。" });
       return;
     }
+    if (body.acceptedTerms !== true || body.acceptedPrivacy !== true) {
+      sendJson(response, 400, {
+        error: "LEGAL_CONSENT_REQUIRED",
+        message: "建立帳號前，請先閱讀並同意使用條款與隱私權政策。",
+      });
+      return;
+    }
 
     if (await statements.getUserByEmail.get(email)) {
       sendJson(response, 409, { error: "EMAIL_EXISTS", message: "這個 email 已經註冊。" });
@@ -487,6 +591,10 @@ async function handleApi(request, response, url) {
 
     const { hash, salt } = hashPassword(password);
     const user = await statements.createUser.get(name, email, hash, salt);
+    const ipAddress = cleanText(clientIp(request), 80) || null;
+    const userAgent = cleanText(request.headers["user-agent"], 220) || null;
+    await statements.recordLegalAcceptance.run(user.id, "terms", config.termsEffectiveDate, ipAddress, userAgent);
+    await statements.recordLegalAcceptance.run(user.id, "privacy", config.termsEffectiveDate, ipAddress, userAgent);
     const session = await createSession(user.id);
     clearRateLimit(registerEmailKey);
     sendJson(response, 201, { user: normalizeUser(user), ...session });
@@ -697,6 +805,15 @@ async function handleApi(request, response, url) {
     const fullUser = await statements.getUserById.get(session.user.id);
     if (!fullUser || !currentPassword || !verifyPassword(currentPassword, fullUser.salt, fullUser.password_hash)) {
       sendJson(response, 401, { error: "BAD_PASSWORD", message: "目前密碼不正確。" });
+      return;
+    }
+
+    const subscription = await billingStatusForUser(session.user.id);
+    if (!["none", "cancelled", "expired"].includes(subscription.status)) {
+      sendJson(response, 409, {
+        error: "ACTIVE_SUBSCRIPTION",
+        message: "請先到「方案」取消自動續訂，再回來刪除帳號，以免外部金流繼續扣款。",
+      });
       return;
     }
 
@@ -961,23 +1078,26 @@ function serveStatic(url, response) {
   createReadStream(target).pipe(response);
 }
 
-function readJson(request) {
+async function readJson(request) {
+  const raw = await readRawBody(request);
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error("Invalid JSON");
+  }
+}
+
+function readRawBody(request) {
   return new Promise((resolve, reject) => {
     let raw = "";
     request.on("data", (chunk) => {
       raw += chunk;
-      if (raw.length > config.maxJsonBytes) {
+      if (Buffer.byteLength(raw, "utf8") > config.maxJsonBytes) {
         request.destroy();
         reject(new Error("Payload too large"));
       }
     });
-    request.on("end", () => {
-      try {
-        resolve(raw ? JSON.parse(raw) : {});
-      } catch {
-        reject(new Error("Invalid JSON"));
-      }
-    });
+    request.on("end", () => resolve(raw));
     request.on("error", reject);
   });
 }

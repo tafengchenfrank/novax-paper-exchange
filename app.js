@@ -9,4 +9,4 @@ if ("caches" in globalThis) {
   );
 }
 
-await import("./src/main.js?v=36");
+await import("./src/main.js?v=37");

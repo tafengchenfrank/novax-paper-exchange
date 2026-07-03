@@ -6,6 +6,9 @@ import {
   deleteRemoteAccount,
   downloadAdminExport,
   followUser,
+  createBillingCheckout,
+  getBillingPortal,
+  getBillingStatus,
   getFollowing,
   getFollowingFeed,
   getAdminDashboard,
@@ -15,6 +18,7 @@ import {
   getMe,
   getNotifications,
   getPublicProfile,
+  getPublicConfig,
   getRemoteAccount,
   getToken,
   loginAccount,
@@ -51,43 +55,67 @@ const legalDocuments = {
   terms: {
     title: "使用條款",
     body: `
-      <p><strong>最後更新：2026-05-21</strong></p>
-      <p>NovaX Paper Exchange 目前為 Beta 測試服務，目的在於提供模擬交易、投資學習與產品體驗。使用本平台即表示你理解並同意以下基本條款。</p>
+      <p><strong>生效日期：2026-07-03</strong></p>
+      <p>NovaX Paper Exchange 提供模擬交易、投資學習與產品體驗。註冊或使用本服務，即表示你已閱讀並同意本條款；經營者與客服資訊揭露於網站頁尾。</p>
       <h3>1. 服務性質</h3>
       <p>本平台提供的是模擬交易環境，不提供真實入金、出金、撮合交易、資產保管、代操、投資顧問或任何金融商品銷售服務。</p>
       <h3>2. 帳號與使用責任</h3>
       <p>你需要自行保管帳號登入資料，並確保提供的 email 與個人資料正確。若發現異常使用，平台可暫停或限制帳號功能。</p>
       <h3>3. 公開內容</h3>
       <p>若你將交易日誌設為公開，其他使用者可能看到你的公開交易紀錄、心得、留言與互動。請避免發布個資、攻擊性內容、違法內容或誤導他人的投資承諾。</p>
-      <h3>4. 服務變更</h3>
-      <p>Beta 期間功能、資料格式、排行榜、社群互動與保存策略可能調整或中斷。平台會盡力維持可用性，但不保證服務永不中斷或資料永不遺失。</p>
-      <h3>5. 免責範圍</h3>
+      <h3>4. 付費方案與自動續訂</h3>
+      <p>付費頁面會在確認前揭露價格、計費週期與方案內容。訂閱會依結帳頁所示週期自動續訂，直到你透過「管理訂閱」取消；取消後通常可使用至當期結束。稅額、幣別與實際付款總額以金流結帳頁為準。</p>
+      <h3>5. 退款與方案異動</h3>
+      <p>退款、取消及數位服務開始提供的規則依本網站「退款政策」辦理。若付款完成但權限未開通，請保留付款資訊並聯絡客服。</p>
+      <h3>6. 服務變更與終止</h3>
+      <p>功能、資料格式與保存策略可能合理調整。平台會盡力維持服務與資料安全；如需終止付費服務，將依適用法令與退款政策處理未履行部分。</p>
+      <h3>7. 智慧財產與禁止行為</h3>
+      <p>不得攻擊、逆向破壞、繞過權限、冒用帳號、散布違法內容或利用服務誤導他人。你保有自行發布內容的權利，並授權平台在提供社群功能所需範圍內顯示該內容。</p>
+      <h3>8. 免責範圍</h3>
       <p>平台資訊僅供教育與模擬用途，不構成投資、法律、稅務或財務建議。任何真實投資決策與風險均由使用者自行承擔。</p>
+      <h3>9. 準據法與聯絡</h3>
+      <p>本條款以中華民國法律為準據法，但不排除消費者依法享有的強制保護。服務、帳務或個資問題請透過頁尾客服信箱聯絡。</p>
     `,
   },
   privacy: {
     title: "隱私權政策",
     body: `
-      <p><strong>最後更新：2026-07-01</strong></p>
-      <p>本政策說明 NovaX Beta 可能收集、使用與保存的資料類型。這是一份產品 Beta 用的基礎版本，正式商業化前應再由專業法務審閱。</p>
+      <p><strong>生效日期：2026-07-03</strong></p>
+      <p>本政策說明 NovaX 如何蒐集、處理、利用與保護個人資料。資料控制者與聯絡資訊揭露於網站頁尾。</p>
       <h3>1. 我們收集的資料</h3>
-      <p>平台可能保存你的帳號名稱、email、密碼雜湊、登入 session、密碼重設 token、模擬資產快照、交易紀錄、學習進度、公開交易日誌、按讚、留言、追蹤關係與系統操作紀錄。</p>
+      <p>平台可能保存帳號名稱、email、密碼雜湊、登入 session、密碼重設 token、IP 與裝置紀錄、條款同意紀錄、模擬資產快照、交易與學習紀錄、公開內容、互動資料，以及訂閱狀態與金流識別碼。平台不保存完整信用卡資料。</p>
       <h3>2. 資料用途</h3>
-      <p>資料會用於登入驗證、同步模擬進度、顯示排行榜、提供公開個人頁與追蹤動態、改善產品體驗、排查錯誤與維護服務安全。</p>
+      <p>資料用於履行服務契約、驗證登入、同步進度、處理訂閱、提供社群功能、客服、錯誤排查、防止濫用、遵循法令及在取得同意時提供相關通知。</p>
       <h3>3. 資料保存與第三方服務</h3>
-      <p>正式 Beta 目前部署於 Render，資料庫使用 Neon PostgreSQL，密碼重設信可能透過 Resend 等郵件服務寄送。這些服務可能依其基礎設施處理與保存資料。請不要在平台輸入敏感個資、真實資產資訊或交易所 API 金鑰。</p>
+      <p>服務可能使用 Render、Neon PostgreSQL、Resend／SMTP 與 Lemon Squeezy 等供應商處理託管、資料庫、郵件與付款。資料可能在供應商營運地跨境處理；我們會限於提供服務所需範圍使用。請勿輸入敏感個資、真實資產資訊或交易所 API 金鑰。</p>
       <h3>4. 資料分享</h3>
       <p>我們不會出售你的個人資料。公開交易日誌、留言、按讚與追蹤行為會依產品設計顯示給其他使用者。</p>
       <h3>5. 使用者選擇</h3>
-      <p>你可以不公開交易日誌，也可以登出帳號。你可在「資料」設定中輸入目前密碼，永久刪除帳號及平台保存的關聯資料。</p>
-      <h3>6. 安全限制</h3>
+      <p>你可不公開交易日誌、修改帳號資料，或在「資料」設定中永久刪除帳號。依法仍須保存的帳務、稅務、防詐或爭議紀錄，可能於法定或必要期間內限制處理後保存。你也可透過客服申請查詢、更正、停止利用或刪除個資。</p>
+      <h3>6. 保存期間</h3>
+      <p>帳號與模擬資料原則上保存至帳號刪除；安全紀錄、條款同意、付款與爭議資料依營運安全、契約與法令所需期間保存，期滿後刪除或去識別化。</p>
+      <h3>7. 安全限制</h3>
       <p>平台會採取合理技術措施保護資料，例如密碼雜湊與環境變數保存密鑰；但網路服務無法保證絕對安全。</p>
+    `,
+  },
+  refund: {
+    title: "退款與取消政策",
+    body: `
+      <p><strong>生效日期：2026-07-03</strong></p>
+      <h3>1. 取消自動續訂</h3>
+      <p>你可隨時在帳號的「方案」頁進入金流商客戶入口取消續訂。取消不會再收取下一期費用，已付款方案原則上可使用至當期結束。</p>
+      <h3>2. 首次訂閱退款</h3>
+      <p>首次訂閱後 7 日內，如尚未大量使用 Pro 功能，可透過客服申請退款。我們會依使用情形、付款平台規則與適用法令處理；法令另有較有利規定時，從其規定。</p>
+      <h3>3. 重複扣款或服務未提供</h3>
+      <p>若發生重複扣款、金額錯誤，或付款後 Pro 權限未在合理時間內開通，請提供帳號 email、訂單編號與付款時間聯絡客服；查證後將補開權限或退款。</p>
+      <h3>4. 數位服務同意</h3>
+      <p>按下結帳前，你會被要求同意付款完成後立即提供數位服務，並確認價格、週期、自動續訂與本政策。此同意不影響你依法不得預先拋棄的消費者權利。</p>
     `,
   },
   risk: {
     title: "風險聲明",
     body: `
-      <p><strong>最後更新：2026-05-21</strong></p>
+      <p><strong>最後更新：2026-07-03</strong></p>
       <p>NovaX 是模擬交易與投資學習工具。請在使用前理解以下限制。</p>
       <h3>1. 非真實交易</h3>
       <p>平台內的資金、損益、倉位、排行榜與交易紀錄皆為模擬用途，不代表真實資產、真實收益或任何可提領價值。</p>
@@ -127,6 +155,15 @@ const app = {
   profileModalOpen: false,
   profileBusy: false,
   accountDeleteBusy: false,
+  publicConfig: {
+    operator: { name: "NovaX Paper Exchange", taxId: "", address: "", supportEmail: "" },
+    termsEffectiveDate: "2026-07-03",
+    emailEnabled: false,
+    billing: { enabled: false, provider: "", priceLabel: "即將推出", portalUrl: "" },
+  },
+  subscription: { plan: "free", status: "none", hasProAccess: false, renewsAt: null, endsAt: null },
+  pricingOpen: false,
+  billingBusy: false,
   adminBootstrapBusy: false,
   legalModalOpen: false,
   activeLegalDoc: "risk",
@@ -209,6 +246,7 @@ registerServiceWorker();
 seedMarkets(app, "sim");
 app.els.limitPrice.value = formatChartPrice(currentPrice(app));
 bindEvents(app);
+refreshPublicAppConfig(app);
 restoreSession(app);
 refreshLeaderboard(app);
 if (app.marketSource === "binance") {
@@ -560,6 +598,16 @@ function bindEvents(app) {
   app.els.saveTradeJournal.addEventListener("click", () => saveTradeJournal(app));
   app.els.syncAccount.addEventListener("click", () => syncNow(app));
   app.els.logoutAccount.addEventListener("click", () => logout(app));
+  app.els.openPricing.addEventListener("click", () => openPricingModal(app));
+  app.els.closePricing.addEventListener("click", () => closePricingModal(app));
+  app.els.pricingModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.pricingClose !== undefined) closePricingModal(app);
+  });
+  app.els.billingCheckout.addEventListener("click", () => startBillingCheckout(app));
+  app.els.billingPortal.addEventListener("click", () => openBillingPortal(app));
+  app.els.proFeatureCards.forEach((card) => card.addEventListener("click", () => {
+    if (card.classList.contains("is-pro-locked")) openPricingModal(app);
+  }));
   app.els.legalDocButtons.forEach((button) => {
     button.addEventListener("click", () => openLegalModal(app, button.dataset.legalDoc));
   });
@@ -663,6 +711,8 @@ function bindEvents(app) {
       closePublicProfileModal(app);
     } else if (app.profileModalOpen) {
       closeProfileModal(app);
+    } else if (app.pricingOpen) {
+      closePricingModal(app);
     } else if (app.authModalOpen) {
       closeAuthModal(app);
     } else if (app.forgotPasswordOpen) {
@@ -699,6 +749,7 @@ async function restoreSession(app) {
     await refreshFollowing(app);
     await refreshFeed(app, { silent: true });
     await refreshNotifications(app, { silent: true });
+    await refreshBillingStatus(app, { silent: true });
   } catch {
     clearToken();
     app.user = null;
@@ -718,12 +769,19 @@ async function submitAuth(app) {
       name: app.els.authName.value.trim(),
       email: app.els.authEmail.value.trim(),
       password: app.els.authPassword.value,
+      acceptedTerms: app.authMode === "register" && app.els.authAcceptTerms.checked,
+      acceptedPrivacy: app.authMode === "register" && app.els.authAcceptPrivacy.checked,
     };
+    if (app.authMode === "register" && (!payload.acceptedTerms || !payload.acceptedPrivacy)) {
+      throw new Error("請先閱讀並同意使用條款與隱私權政策。");
+    }
     const result =
       app.authMode === "register" ? await registerAccount(payload) : await loginAccount(payload);
     app.user = result.user;
     app.authModalOpen = false;
     app.els.authPassword.value = "";
+    app.els.authAcceptTerms.checked = false;
+    app.els.authAcceptPrivacy.checked = false;
     setAuthMessage(app, `歡迎，${result.user.name}`, "ok");
     await restoreRemoteSnapshot(app);
     await syncNow(app, { silent: true });
@@ -731,6 +789,7 @@ async function submitAuth(app) {
     await refreshFollowing(app);
     await refreshFeed(app, { silent: true });
     await refreshNotifications(app, { silent: true });
+    await refreshBillingStatus(app, { silent: true });
   } catch (error) {
     setAuthMessage(app, error.message, "error");
   } finally {
@@ -1107,6 +1166,9 @@ function clearSignedInState(app) {
   app.authMode = "login";
   app.authModalOpen = false;
   app.profileModalOpen = false;
+  app.pricingOpen = false;
+  app.billingBusy = false;
+  app.subscription = { plan: "free", status: "none", hasProAccess: false, renewsAt: null, endsAt: null };
   app.publicProfileOpen = false;
   app.publicProfile = null;
   app.selectedPublicProfileId = null;
@@ -1138,6 +1200,112 @@ function clearSignedInState(app) {
 function closeAuthModal(app) {
   app.authModalOpen = false;
   renderAll(app);
+}
+
+async function refreshPublicAppConfig(app) {
+  try {
+    app.publicConfig = await getPublicConfig();
+    const operator = app.publicConfig.operator || {};
+    const disclosure = [
+      operator.name || "NovaX Paper Exchange",
+      operator.taxId ? `統編 ${operator.taxId}` : "",
+      operator.supportEmail ? `客服 ${operator.supportEmail}` : "客服信箱待設定",
+    ].filter(Boolean);
+    app.els.operatorDisclosure.textContent = disclosure.join(" · ");
+    app.els.operatorDisclosure.title = operator.address || "";
+  } catch {
+    app.els.operatorDisclosure.textContent = "NovaX Paper Exchange · Beta";
+  } finally {
+    renderAll(app);
+  }
+}
+
+async function openPricingModal(app) {
+  app.pricingOpen = true;
+  setBillingMessage(app, "");
+  renderAll(app);
+  if (app.user) await refreshBillingStatus(app, { silent: true });
+  renderAll(app);
+  app.els.closePricing.focus();
+}
+
+function closePricingModal(app) {
+  app.pricingOpen = false;
+  setBillingMessage(app, "");
+  renderAll(app);
+}
+
+async function refreshBillingStatus(app, options = {}) {
+  if (!app.user) {
+    app.subscription = { plan: "free", status: "none", hasProAccess: false, renewsAt: null, endsAt: null };
+    return;
+  }
+  try {
+    const result = await getBillingStatus();
+    app.subscription = result.subscription;
+    app.publicConfig.billing = { ...app.publicConfig.billing, ...result.billing };
+  } catch (error) {
+    if (!options.silent) setBillingMessage(app, error.message, "error");
+  }
+}
+
+async function startBillingCheckout(app) {
+  if (app.billingBusy) return;
+  if (!app.user) {
+    app.pricingOpen = false;
+    app.authMode = "login";
+    app.authModalOpen = true;
+    setAuthMessage(app, "請先登入後再升級 Pro。", "error");
+    renderAll(app);
+    return;
+  }
+  if (!app.publicConfig.billing?.enabled) {
+    setBillingMessage(app, "付費方案尚未開放，現在不會收取任何費用。", "error");
+    return;
+  }
+  if (!app.els.billingAcceptTerms.checked
+    || !app.els.billingAcceptRecurring.checked
+    || !app.els.billingAcceptRefund.checked) {
+    setBillingMessage(app, "請先閱讀並勾選全部付費與續訂同意事項。", "error");
+    return;
+  }
+
+  app.billingBusy = true;
+  setBillingMessage(app, "正在建立安全結帳頁...");
+  renderAll(app);
+  try {
+    const { checkoutUrl } = await createBillingCheckout({
+      acceptedTerms: true,
+      acceptedPrivacy: true,
+      acceptedRecurring: true,
+    });
+    window.location.assign(checkoutUrl);
+  } catch (error) {
+    setBillingMessage(app, error.message, "error");
+    app.billingBusy = false;
+    renderAll(app);
+  }
+}
+
+async function openBillingPortal(app) {
+  if (!app.user || app.billingBusy) return;
+  app.billingBusy = true;
+  setBillingMessage(app, "正在開啟訂閱管理...");
+  renderAll(app);
+  try {
+    const { portalUrl } = await getBillingPortal();
+    window.location.assign(portalUrl);
+  } catch (error) {
+    setBillingMessage(app, error.message, "error");
+  } finally {
+    app.billingBusy = false;
+    renderAll(app);
+  }
+}
+
+function setBillingMessage(app, message, tone = "normal") {
+  app.els.billingMessage.textContent = message;
+  app.els.billingMessage.className = `auth-message ${tone === "normal" ? "" : tone}`.trim();
 }
 
 function openLegalModal(app, doc) {

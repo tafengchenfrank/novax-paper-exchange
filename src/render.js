@@ -13,6 +13,7 @@ export function renderAll(app) {
   renderBook(app);
   renderTradePanel(app);
   renderPortfolio(app);
+  renderBilling(app);
   renderOnboarding(app);
   renderFeed(app);
   renderAlerts(app);
@@ -1156,6 +1157,8 @@ function renderAuth(app) {
   app.els.resetPasswordModal.classList.toggle("is-hidden", !app.resetPasswordOpen);
   app.els.profileModal.classList.toggle("is-hidden", !app.profileModalOpen || !signedIn);
   app.els.authNameField.classList.toggle("is-hidden", app.authMode !== "register");
+  app.els.authLegalConsent.classList.toggle("is-hidden", app.authMode !== "register");
+  app.els.authPassword.autocomplete = app.authMode === "register" ? "new-password" : "current-password";
   app.els.authForgotPassword.classList.toggle("is-hidden", app.authMode !== "login");
   app.els.authTitle.textContent = app.authMode === "register" ? "建立帳號" : "登入帳號";
   app.els.authModeToggle.textContent = app.authMode === "register" ? "已有帳號，登入" : "建立新帳號";
@@ -1179,6 +1182,54 @@ function renderAuth(app) {
   if (signedIn) {
     app.els.authUserName.textContent = isAdmin ? `${app.user.name} · 管理員` : app.user.name;
   }
+}
+
+function renderBilling(app) {
+  const billing = app.publicConfig?.billing || {};
+  const subscription = app.subscription || {};
+  const pro = Boolean(subscription.hasProAccess);
+  const billingEnabled = Boolean(billing.enabled);
+  const locked = billingEnabled && !pro;
+
+  app.els.pricingModal.classList.toggle("is-hidden", !app.pricingOpen);
+  app.els.accountPlanBadge.textContent = pro ? "PRO" : "FREE";
+  app.els.accountPlanBadge.classList.toggle("is-pro", pro);
+  app.els.proPriceLabel.textContent = billingEnabled ? billing.priceLabel : "Beta 期間免費開放";
+  app.els.billingConsent.classList.toggle("is-hidden", pro || !billingEnabled);
+  app.els.billingCheckout.classList.toggle("is-hidden", pro);
+  app.els.billingCheckout.disabled = app.billingBusy || !billingEnabled;
+  app.els.billingCheckout.textContent = app.billingBusy ? "處理中..." : billingEnabled ? "升級 Pro" : "付費方案尚未開放";
+  const canOpenPortal = Boolean(pro && (billing.portalUrl || subscription.portalUrl));
+  app.els.billingPortal.classList.toggle("is-hidden", !canOpenPortal);
+  app.els.billingPortal.disabled = app.billingBusy;
+  app.els.billingCurrentPlan.textContent = billingPlanLabel(subscription, billingEnabled);
+
+  app.els.proFeatureCards.forEach((card) => card.classList.toggle("is-pro-locked", locked));
+  if (locked) {
+    app.els.performanceDrawdown.textContent = "PRO";
+    app.els.performanceDrawdown.className = "";
+    app.els.performanceAveragePnl.textContent = "PRO";
+    app.els.performanceAveragePnl.className = "";
+    app.els.performanceProfitFactor.textContent = "PRO";
+    app.els.performanceProfitFactor.className = "";
+  }
+}
+
+function billingPlanLabel(subscription, billingEnabled) {
+  if (subscription?.hasProAccess) {
+    if (subscription.status === "cancelled" && subscription.endsAt) {
+      return `目前方案：Pro（已取消，使用至 ${shortDate(subscription.endsAt)}）`;
+    }
+    if (subscription.renewsAt) return `目前方案：Pro（下次續訂 ${shortDate(subscription.renewsAt)}）`;
+    return "目前方案：Pro";
+  }
+  return billingEnabled ? "目前方案：Free" : "目前方案：Free（Beta 期間進階統計免費預覽）";
+}
+
+function shortDate(value) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "--";
+  return new Intl.DateTimeFormat("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
 function renderFeedbackModals(app) {

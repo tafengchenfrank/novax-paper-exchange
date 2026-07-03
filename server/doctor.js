@@ -57,6 +57,35 @@ await check("Email delivery", () => {
   return "disabled; set Resend or SMTP env vars to enable password reset email";
 });
 
+await check("Subscription billing", () => {
+  const requested = Boolean(
+    config.billing.requestedProvider
+    || config.billing.checkoutUrl
+    || config.billing.portalUrl
+    || config.billing.proVariantId
+    || config.billing.webhookSecret
+    || config.billing.linkSecret
+  );
+  if (!requested) return "disabled; the Beta remains free";
+  if (!config.billing.enabled) {
+    const missing = [
+      config.billing.requestedProvider !== "lemonsqueezy" ? "NOVAX_BILLING_PROVIDER=lemonsqueezy" : "",
+      !config.billing.checkoutUrl ? "LEMONSQUEEZY_CHECKOUT_URL" : "",
+      !config.billing.proVariantId ? "LEMONSQUEEZY_PRO_VARIANT_ID" : "",
+      !config.billing.webhookSecret ? "LEMONSQUEEZY_WEBHOOK_SECRET" : "",
+      !config.billing.linkSecret ? "NOVAX_BILLING_LINK_SECRET" : "",
+    ].filter(Boolean);
+    throw new Error(`Incomplete billing config. Missing ${missing.join(", ")}.`);
+  }
+  if (config.isProduction && config.billing.allowTestMode) {
+    throw new Error("NOVAX_BILLING_ALLOW_TEST_MODE must be false in production.");
+  }
+  if (config.isProduction && !config.operator.supportEmail) {
+    throw new Error("Set NOVAX_SUPPORT_EMAIL before enabling production billing.");
+  }
+  return `${config.billing.provider} ${config.billing.priceLabel}`;
+});
+
 if (config.isProduction) {
   if (config.storage === "postgres") {
     await check("PostgreSQL URL", () => {

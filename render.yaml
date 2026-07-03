@@ -22,6 +22,14 @@ services:
         value: "1000000"
       - key: NOVAX_PASSWORD_RESET_MINUTES
         value: "30"
+      - key: NOVAX_OPERATOR_NAME
+        value: NovaX Paper Exchange
+      - key: NOVAX_OPERATOR_TAX_ID
+        sync: false
+      - key: NOVAX_OPERATOR_ADDRESS
+        sync: false
+      - key: NOVAX_TERMS_EFFECTIVE_DATE
+        value: "2026-07-03"
       - key: NOVAX_ADMIN_TOKEN
         sync: false
       - key: RESEND_API_KEY
@@ -42,3 +50,19 @@ services:
         sync: false
       - key: NOVAX_SUPPORT_EMAIL
         sync: false
+      - key: NOVAX_BILLING_PROVIDER
+        value: lemonsqueezy
+      - key: LEMONSQUEEZY_CHECKOUT_URL
+        sync: false
+      - key: LEMONSQUEEZY_PORTAL_URL
+        sync: false
+      - key: LEMONSQUEEZY_PRO_VARIANT_ID
+        sync: false
+      - key: LEMONSQUEEZY_WEBHOOK_SECRET
+        sync: false
+      - key: NOVAX_BILLING_LINK_SECRET
+        sync: false
+      - key: NOVAX_PRO_PRICE_LABEL
+        value: US$9 / 月
+      - key: NOVAX_BILLING_ALLOW_TEST_MODE
+        value: "false"

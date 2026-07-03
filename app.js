@@ -1,4 +1,4 @@
-const APP_CACHE_VERSION = "novax-pwa-v34";
+const APP_CACHE_VERSION = "novax-pwa-v36";
 
 if ("caches" in globalThis) {
   const cacheNames = await caches.keys();
@@ -9,4 +9,4 @@ if ("caches" in globalThis) {
   );
 }
 
-await import("./src/main.js?v=34");
+await import("./src/main.js?v=36");

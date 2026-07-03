@@ -1168,10 +1168,12 @@ function renderAuth(app) {
     : "";
   app.els.resetPasswordSubmit.disabled = app.resetPasswordBusy;
   app.els.resetPasswordSubmit.textContent = app.resetPasswordBusy ? "更新中..." : "更新密碼";
-  app.els.profileSubmit.disabled = app.profileBusy;
+  app.els.profileSubmit.disabled = app.profileBusy || app.accountDeleteBusy;
   app.els.profileSubmit.textContent = app.profileBusy ? "儲存中..." : "儲存資料";
+  app.els.profileDelete.disabled = app.profileBusy || app.accountDeleteBusy;
+  app.els.profileDelete.textContent = app.accountDeleteBusy ? "刪除中..." : "永久刪除帳號";
   app.els.adminBootstrapBlock.classList.toggle("is-hidden", !signedIn || isAdmin);
-  app.els.adminBootstrapSubmit.disabled = app.adminBootstrapBusy;
+  app.els.adminBootstrapSubmit.disabled = app.adminBootstrapBusy || app.accountDeleteBusy;
   app.els.adminBootstrapSubmit.textContent = app.adminBootstrapBusy ? "啟用中..." : "啟用管理員權限";
 
   if (signedIn) {

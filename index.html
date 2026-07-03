@@ -13,8 +13,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/novax-logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/novax-icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=34" />
-    <script type="module" src="app.js?v=34"></script>
+    <link rel="stylesheet" href="styles.css?v=36" />
+    <script type="module" src="app.js?v=36"></script>
   </head>
   <body>
     <div class="app-frame">
@@ -406,6 +406,7 @@
             <div>
               <p class="eyebrow">Weekly Arena</p>
               <h2>排行榜</h2>
+              <p class="panel-note">模擬績效由使用者同步，未經平台驗證</p>
             </div>
             <span class="metric-pill">虛擬資金</span>
           </div>
@@ -612,6 +613,11 @@
               <input id="adminBootstrapToken" type="password" autocomplete="off" />
             </label>
             <button id="adminBootstrapSubmit" class="auth-secondary" type="button">啟用管理員權限</button>
+          </div>
+          <div class="account-danger-zone">
+            <strong>刪除帳號與雲端資料</strong>
+            <p>請先在上方輸入目前密碼。刪除後無法復原，公開交易、留言與追蹤資料也會一併移除。</p>
+            <button id="profileDelete" class="auth-danger" type="button">永久刪除帳號</button>
           </div>
           <p id="profileMessage" class="auth-message" role="status"></p>
         </section>

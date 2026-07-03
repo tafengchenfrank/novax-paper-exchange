@@ -1,9 +1,9 @@
-const CACHE_VERSION = "novax-pwa-v34";
+const CACHE_VERSION = "novax-pwa-v36";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css?v=34",
-  "/app.js?v=34",
+  "/styles.css?v=36",
+  "/app.js?v=36",
   "/manifest.webmanifest",
   "/assets/novax-icon-192.png",
   "/assets/novax-icon-512.png",

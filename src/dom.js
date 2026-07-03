@@ -103,6 +103,7 @@ export const els = {
   profileCurrentPassword: document.querySelector("#profileCurrentPassword"),
   profileNewPassword: document.querySelector("#profileNewPassword"),
   profileSubmit: document.querySelector("#profileSubmit"),
+  profileDelete: document.querySelector("#profileDelete"),
   profileMessage: document.querySelector("#profileMessage"),
   adminBootstrapBlock: document.querySelector("#adminBootstrapBlock"),
   adminBootstrapToken: document.querySelector("#adminBootstrapToken"),

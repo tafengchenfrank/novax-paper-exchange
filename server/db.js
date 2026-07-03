@@ -315,6 +315,7 @@ const statementSql = {
     RETURNING id, name, email, role, status, suspension_reason, suspended_at, created_at
   `,
   updateUserPassword: "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
+  deleteUser: "DELETE FROM users WHERE id = ?",
   createSession: `
     INSERT INTO sessions (user_id, token_hash, expires_at)
     VALUES (?, ?, ?)
